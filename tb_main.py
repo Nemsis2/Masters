@@ -59,26 +59,29 @@ if device != "cuda":
       exit(1)
 
 # set paths
-k_fold_path = "../data/tb/combo/multi_folds/"
-model_path = "../models/tb/"
+K_FOLD_PATH = "../data/tb/combo/multi_folds/"
+MODEL_PATH = "../models/tb/"
 
 # choose which melspec we will be working on
 # 128 and 80 both seem to be worse
-melspec = "180_melspec_fold_"
+MELSPEC = "180_melspec_fold_"
 
 # set hyperpaperameters
 BATCH_SIZE = 128
 LOAD_BATCH_SIZE = 1024
-num_epochs = 12
+num_epochs = 25
 num_outer_folds = 3
 num_inner_folds = 4
 pruning_percentage = 0.3
 
-# select what should happen to the models
-train_model_flag = 0
+# training options for the models
+train_model_flag = 1
 prune_model_flag = 0
 student_model_flag = 0
+
+# testing options for the models
 test_model_flag = 0
+VAL_MODEL_TEST_FLAG = 1
 test_student_model_flag = 0
 generate_graph = 0
 
@@ -165,6 +168,24 @@ def extract_train_data(path, outer_fold, current_inner_fold):
             if inner_fold == ("fold_"+str(current_inner_fold)):
                   for i, t in zip( data[inner_fold]['train']['inps'], data[inner_fold]['train']['tgts']):
                         batch.append([i, t])
+
+      batch = np.array(batch, dtype=object)
+      
+      return batch
+
+
+
+def extract_val_data(path, outer_fold, current_inner_fold):
+      batch = []
+      # read in the data located at the path 
+      data = pickle.load(open(path + str(outer_fold) + ".pkl", 'rb'))
+
+      # zip the information from the dictionary into a list of arrays
+      for inner_fold in data.keys():
+            if inner_fold == ("fold_"+str(current_inner_fold)):
+                  for labels in data[inner_fold]['val'].keys():
+                        for i,t in zip( data[inner_fold]['val'][labels]['inps'], data[inner_fold]['val'][labels]['tgts']):
+                              batch.append([i,t])
 
       batch = np.array(batch, dtype=object)
       
@@ -289,21 +310,24 @@ def test(x, models):
 
 
 
-def performance_assess(y, results):
+def performance_assess(y, results, test_type):
       true_positive = 0
       false_positive = 0
       true_negative = 0
       false_negative = 0
 
-      for i in range(len(results)):
-            if i == 0:
-                  sum = np.array(results[i], dtype=object)
-            else:
-                  sum += np.array(results[i], dtype=object)
+      if test_type == 'test':
+            for i in range(len(results)):
+                  if i == 0:
+                        sum = np.array(results[i], dtype=object)
+                  else:
+                        sum += np.array(results[i], dtype=object)
 
-      average_of_models = sum/4
+            average_of_models = sum/4
+      else:
+            average_of_models = results
 
-
+      
       for i in range(len(average_of_models)):
             for j in range(len(average_of_models[i])):
                   if y[i][j][0] == 1:
@@ -316,12 +340,6 @@ def performance_assess(y, results):
                               true_negative += 1
                         else: 
                               false_negative += 1
-
-
-      print("true positive:", true_positive/(true_positive + false_positive))
-      print("false positive:", false_positive/(true_positive + false_positive))
-      print("true negative:", true_negative/(true_negative + false_negative))
-      print("false negative", false_negative/(true_negative + false_negative))
 
       AUC_score = (true_positive/(true_positive+false_positive) + true_negative/(true_negative+false_negative))*0.5
 
@@ -336,7 +354,7 @@ def train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)
             print("epoch=", epoch)
 
             # get the train fold
-            batch = extract_train_data(k_fold_path + melspec, train_outer_fold, train_inner_fold)
+            batch = extract_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
             batch_data = batch[:,0] # get the data from the batch
             batch_labels = batch[:,1] # get the labels from the batch
 
@@ -356,13 +374,44 @@ def train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)
             del batch_data, batch_labels, batch
             gc.collect()
 
-      pickle.dump(model, open(model_path + "resnet18_" + melspec + str(train_outer_fold) + "_inner_fold_" + str(train_inner_fold), 'wb')) # save the model
+      pickle.dump(model, open(MODEL_PATH + "resnet18_" + MELSPEC + str(train_outer_fold) + "_inner_fold_" + str(train_inner_fold), 'wb')) # save the model
 
 
 
-def test_model(models, test_fold, is_pruned):
-      test_batch = extract_test_data(k_fold_path + "test/test_dataset_mel_180_fold_", test_fold)
+def validate_model(model, train_outer_fold, train_inner_fold):
+      # get the train fold
+      batch = extract_val_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
+      batch_data = batch[:,0] # get the data from the batch
+      batch_labels = batch[:,1] # get the labels from the batch
 
+      AUC_for_k_fold = 0
+      # break the data into segments load_batch_size long
+      for i in range(int(np.ceil(len(batch_data)/LOAD_BATCH_SIZE))):
+
+            x_val, y_val = get_batch_of_data(batch_data, batch_labels, LOAD_BATCH_SIZE, i)
+
+
+            results = []
+            for i in range(len(x_val)):
+                  with th.no_grad():
+                        results.append(to_softmax((model(th.tensor(x_val[i]).to(device))).cpu()))
+
+            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_val, results, test_type='val') # check the accuracy of the model
+
+            AUC_for_k_fold += AUC
+
+
+      AUC_for_k_fold = AUC_for_k_fold/int(np.ceil(len(batch_data)/LOAD_BATCH_SIZE))
+
+      print("AUC for outer_fold", train_outer_fold, "and inner_fold", train_inner_fold, "=", AUC_for_k_fold )
+
+      del batch, batch_labels, x_val, y_val
+      gc.collect()
+
+
+
+def test_models(models, test_fold, is_pruned):
+      test_batch = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
       test_batch_data = test_batch[:,0]
       test_batch_labels = test_batch[:,1]
 
@@ -379,7 +428,7 @@ def test_model(models, test_fold, is_pruned):
                   for j in range(len(results[i])):
                         results[i][j] = to_softmax(results[i][j])
 
-            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_test, results) # check the accuracy of the model
+            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_test, results, test_type='test') # check the accuracy of the model
 
             AUC_for_k_fold += AUC
 
@@ -423,21 +472,23 @@ if train_model_flag == 1:
 
 
 
+# wont work rn
 if prune_model_flag == 1:
       print("Beginning Pruning")
       
       for prune_fold in range(num_outer_folds):
             print("prune_fold=", prune_fold)
-            model = pickle.load(open((model_path + "resnet18_" + melspec + str(prune_fold)), 'rb')) # load in the model
+            model = pickle.load(open((MODEL_PATH + "resnet18_" + MELSPEC + str(prune_fold)), 'rb')) # load in the model
             
             pruned_model, percentage_actually_pruned = prune_model(model, pruning_percentage)
 
-            test_model(pruned_model, prune_fold, percentage_actually_pruned)
+            test_models(pruned_model, prune_fold, percentage_actually_pruned)
 
-            pickle.dump(pruned_model, open(model_path + "resnet18_" + melspec + str(prune_fold) + "_pruned", 'wb')) # save the model
+            pickle.dump(pruned_model, open(MODEL_PATH + "resnet18_" + MELSPEC + str(prune_fold) + "_pruned", 'wb')) # save the model
 
 
 
+# wont work rn
 if student_model_flag == 1:
       print("Creating student model")
       for train_fold in range(num_outer_folds):
@@ -446,6 +497,19 @@ if student_model_flag == 1:
             optimizer = optim.Adam(model.parameters(), lr=0.0001)
             print("Student train_fold=", train_fold)
             train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)   
+
+
+
+if VAL_MODEL_TEST_FLAG == 1:
+      print("Beginning Model Validation")
+      for train_outer_fold in range(num_outer_folds):
+            print("test_outer_fold=", train_outer_fold)
+            
+
+            for train_inner_fold in range(num_inner_folds):
+                  print("test_inner_fold=", train_inner_fold)
+                  model = (pickle.load(open(MODEL_PATH + "resnet18_" + MELSPEC + str(train_outer_fold) + "_inner_fold_" + str(train_inner_fold), 'rb'))) # load in the model
+                  validate_model(model, train_outer_fold, train_inner_fold)
 
 
 
@@ -458,18 +522,19 @@ if test_model_flag == 1:
             models = []
             for test_inner_fold in range(num_inner_folds):
                   print("test_inner_fold=", test_inner_fold)
-                  models.append(pickle.load(open(model_path + "resnet18_" + melspec + str(test_outer_fold) + "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
+                  models.append(pickle.load(open(MODEL_PATH + "resnet18_" + MELSPEC + str(test_outer_fold) + "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
             
-            test_model(models, test_outer_fold, 1)
+            test_models(models, test_outer_fold, 1)
 
 
 
+# wont work rn
 if test_student_model_flag == 1:
       print("Testing student model")
       for test_fold in range(num_outer_folds):
             print("test_fold=", test_fold)
-            model = pickle.load(open((model_path + "student_resnet_" + melspec + str(test_fold)), 'rb')) # load in the model
-            test_model(model, test_fold, 1)
+            model = pickle.load(open((MODEL_PATH + "student_resnet_" + MELSPEC + str(test_fold)), 'rb')) # load in the model
+            test_models(model, test_fold, 1)
 
 
 

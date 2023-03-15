@@ -77,7 +77,6 @@ class ResidualBlock1(nn.Module):
 
 
 
-
 class ResidualBlock2(nn.Module):
     """
     Block used for a ResNet model where every layer consists of two 
@@ -242,6 +241,7 @@ class ResidualBlock3(nn.Module):
         return out
     
 
+
 class ResNet_2layer(nn.Module):
     """
     Block used for a ResNet model where every convolutional layer consists of two dimensionally similar convolutional layers.
@@ -278,11 +278,13 @@ class ResNet_2layer(nn.Module):
     """
     def __init__(self, block,layers , num_classes = 10):
         """
-        Initialize the 4 layer deep cnn block.
+        Initialize the 4 layer deep resnet.
     
         Parameters:
         -----------
             block : type of block to be used with this model.
+
+            layers: number of blocks for each layer
 
             num_classes : number of classes the output can be classified into.
 
@@ -488,7 +490,6 @@ class ResNet_3layer(nn.Module):
 
         return out
     
-
 
 
 class ResNet_2layer_2deep(nn.Module):
