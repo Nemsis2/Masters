@@ -242,9 +242,9 @@ class ResidualBlock3(nn.Module):
     
 
 
-class ResNet_2layer(nn.Module):
+class ResNet_4layer(nn.Module):
     """
-    Block used for a ResNet model where every convolutional layer consists of two dimensionally similar convolutional layers.
+    ResNet model which has 4 distinct layers. Each layer must have the same number of output channels.
 
     Attributes:
     -----------
@@ -289,7 +289,7 @@ class ResNet_2layer(nn.Module):
             num_classes : number of classes the output can be classified into.
 
         """
-        super(ResNet_2layer, self).__init__()
+        super(ResNet_4layer, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
                         nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),
@@ -367,10 +367,11 @@ class ResNet_2layer(nn.Module):
     
 
 
-class ResNet_3layer(nn.Module):
+class ResNet_4layer_3deep(nn.Module):
     """
-    Block used for a ResNet model where every convolutional layer consists of two dimensionally similar convolutional layers
-    followed by a third convolutional layer which is 4* the output dimension of the previous convolutional layer.
+    ResNet model which has 4 distinct layers. each layer must consit of 3 conv nets. 
+    The first 2 conv nets must have the same number of output channels while the third conv net 
+    should have 4x the number of output channels compared to the first 2.
 
     Attributes:
     -----------
@@ -415,7 +416,7 @@ class ResNet_3layer(nn.Module):
             num_classes : number of classes the output can be classified into.
 
         """
-        super(ResNet_3layer, self).__init__()
+        super(ResNet_4layer_3deep, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
                         nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),
@@ -492,9 +493,9 @@ class ResNet_3layer(nn.Module):
     
 
 
-class ResNet_2layer_2deep(nn.Module):
+class ResNet_2layer(nn.Module):
     """
-    Block used for a ResNet model where every convolutional layer consists of two dimensionally similar convolutional layers.
+    Block used for a ResNet model which has 2 distinct layers. Each layer must have the same number of output channels.
 
     Attributes:
     -----------
@@ -539,7 +540,7 @@ class ResNet_2layer_2deep(nn.Module):
             num_classes : number of classes the output can be classified into.
 
         """
-        super(ResNet_2layer_2deep, self).__init__()
+        super(ResNet_2layer, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
                         nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),

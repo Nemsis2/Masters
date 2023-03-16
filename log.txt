@@ -1,0 +1,11 @@
+INFO:root:('Final performance for test fold', '0', ':', '0.766450340918426')
+INFO:root:('Final performance for test fold', '1', ':', '0.7045462589367877')
+INFO:root:('Final performance for test fold', '2', ':', '0.6542213699857234')
+
+INFO:root:('Final performance for test fold', '0', ':', '0.7199539965497412')
+INFO:root:('Final performance for test fold', '1', ':', '0.6244248601967863')
+INFO:root:('Final performance for test fold', '2', ':', '0.5963314951151919')
+
+INFO:root:('Final performance for test fold', '0', ':', '0.790478928776801')
+INFO:root:('Final performance for test fold', '1', ':', '0.6765590712819424')
+INFO:root:('Final performance for test fold', '2', ':', '0.5829297651373064')
