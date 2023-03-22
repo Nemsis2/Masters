@@ -26,15 +26,13 @@ functions:
 
 """
 To Do:
-Comment things properly and check all implementations.
-
 Re-implement inner fold models and then mess with hyperparameters until optimal is found for Resnet6.
 
 Do a comparison between an ensemble of Resnet6(val_set included) vs a Resnet6 trained on the full train set(val included).
 
 Create a ensemble model from the Resnet6 models.
 
-Compare all 3 variations.
+Compare all 3 variations. Add random seed selection as well as storage.
 
 Implement pre-training and perform all tests again. Vary model size as well to check how this affects it.
 
@@ -73,16 +71,16 @@ NUM_INNER_FOLDS = 4
 PRUNING_PERCENTAGE = 0.3
 
 # training options for the models
-TRAIN_MODEL_FLAG = 0
-TRAIN_MODEL_OUTER_ONLY_FLAG = 1
+TRAIN_INNER_MODEL_FLAG = 0
+TRAIN_MODEL_OUTER_ONLY_FLAG = 0
+TRAIN_ENSEMBLE_MODEL_FLAG = 0
 PRUNE_MODEL_FLAG = 0
-STUDENT_MODEL_FLAG = 0
 
 # testing options for the models
-TEST_MODEL_FLAG = 0
-TEST_OUTER_ONLY_MODEL_FLAG = 1
+TEST_INNER_MODEL_FLAG = 0
+TEST_INNER_ENSEMBLE_MODELS_FLAG = 1
+TEST_OUTER_ONLY_MODEL_FLAG = 1      
 VAL_MODEL_TEST_FLAG = 0
-TEST_STUDENT_MODEL_FLAG = 0
 GENERATE_GRAPH_FLAG = 0
 
 
@@ -121,7 +119,9 @@ def nested_children(m: th.nn.Module):
     return output
 
 
-
+"""
+normalizes output of the model using a softmax function
+"""
 def to_softmax(results):
       softmax = nn.Softmax(dim=1)
       results = softmax(results)
@@ -129,14 +129,18 @@ def to_softmax(results):
       return results
 
 
-
+"""
+log info from a test
+"""
 def log_test_info(test_fold, AUC_for_k_fold):
       logging.basicConfig(filename="log.txt", filemode='a', level=logging.INFO)
       logging_info = "Final performance for test fold", str(test_fold), ":", str(AUC_for_k_fold)
       logging.info(logging_info)
 
 
-
+"""
+perform pruning on a resnet model
+"""
 def prune_model(model, percentage):
       total_params_before = get_pruned_parameters_countget_pruned_parameters_count(model)
       l = nested_children(model)
@@ -165,7 +169,9 @@ def prune_model(model, percentage):
       return model, (total_params_after/total_params_before)
 
 
-
+"""
+get train data for a specific inner and outer fold
+"""
 def extract_train_data(path, outer_fold, current_inner_fold):
       batch = []
       # read in the data located at the path 
@@ -178,12 +184,18 @@ def extract_train_data(path, outer_fold, current_inner_fold):
                         batch.append([i, t])
 
       batch = np.array(batch, dtype=object)
-      
-      return batch
+
+      batch_data = batch[:,0] # get the data from the batch
+      batch_labels = batch[:,1] # get the labels from the batch
+
+      return batch_data, batch_labels
 
 
-
-def extract_all_train_data(path, outer_fold):
+"""
+get all data in an outer fold
+extracts only train data if final_model =0 and includes validation data if final_model=1
+"""
+def extract_all_train_data(path, outer_fold, final_model=0):
       batch = []
       # read in the data located at the path 
       data = pickle.load(open(path + str(outer_fold) + ".pkl", 'rb'))
@@ -194,17 +206,20 @@ def extract_all_train_data(path, outer_fold):
             for i, t in zip( data[inner_fold]['train']['inps'], data[inner_fold]['train']['tgts']):
                   batch.append([i, t])
 
-            for labels in data[inner_fold]['val'].keys():
-                  # get the validation data
-                  for i,t in zip( data[inner_fold]['val'][labels]['inps'], data[inner_fold]['val'][labels]['tgts']):
-                        batch.append([i,t])
+            if final_model == 1:
+                  for labels in data[inner_fold]['val'].keys():
+                        # get the validation data
+                        for i,t in zip( data[inner_fold]['val'][labels]['inps'], data[inner_fold]['val'][labels]['tgts']):
+                              batch.append([i,t])
 
       batch = np.array(batch, dtype=object)
       
       return batch
 
 
-
+"""
+get val data for a specific inner and outer fold
+"""
 def extract_val_data(path, outer_fold, current_inner_fold):
       batch = []
       # read in the data located at the path 
@@ -218,11 +233,17 @@ def extract_val_data(path, outer_fold, current_inner_fold):
                               batch.append([i,t])
 
       batch = np.array(batch, dtype=object)
+
+
+      batch_data = batch[:,0] # get the data from the batch
+      batch_labels = batch[:,1] # get the labels from the batch
       
-      return batch
+      return batch_data, batch_labels
 
 
-
+"""
+get the test data
+"""
 def extract_test_data(path, fold):
       batch = []
       # read in the data located at the path 
@@ -241,7 +262,9 @@ def extract_test_data(path, fold):
       return batch_data, batch_labels
 
 
-
+"""
+reshape data to size 3 x 224 x 224
+"""
 def reshape_data(data):
       # create the transform
       transform_spectra = transforms.Compose([  transforms.Resize((224,224)),
@@ -266,7 +289,9 @@ def reshape_data(data):
       return data, del_indx
 
 
-
+"""
+process a batch of data transforming it to size 3 x 224 x 224
+"""
 def process_data(x, y):
       x_return = []
       y_return = []
@@ -293,7 +318,9 @@ def process_data(x, y):
       return x_return, y_return
 
 
-
+"""
+create a batch of batch sized samples
+"""
 def get_batch_of_data(data, labels, batch_size, i):
       # handles the case where load_batch_size number of samples are still available
       if i < int(np.ceil(len(data)/batch_size)):
@@ -309,7 +336,9 @@ def get_batch_of_data(data, labels, batch_size, i):
       return x,y
 
 
-
+"""
+complete a training step for a batch of data
+"""
 def train(x, y, model, optimizer, criterion):
       model = model.to(device)
       # use batches when loading to prevent memory overflow
@@ -328,7 +357,32 @@ def train(x, y, model, optimizer, criterion):
             optimizer.zero_grad() # set the optimizer grad to zero
 
 
+"""
+complete a training step for a batch of data
+"""
+def ensemble_train(x, y, model, inner_model,  optimizer, criterion_ce, criterion_kl):
+      model = model.to(device)
+      inner_model = inner_model.to(device)
+      
+      for i in range(len(x)):
+            # prep the data
+            x_batch = th.as_tensor(x[i]).to(device) # grab data of size batch and move to the gpu
+            y_batch = th.as_tensor(y[i]).to(device) # grab the label
 
+            # run through the model
+            results = model(x_batch) # get the model to make predictions
+            inner_results = get_predictions(x_batch, inner_model).to(device) #returns softmax predictions of the inner model
+            ce_loss = criterion_ce(results, y_batch) # calculate the loss
+            ce_loss.backward(retain_graph=True) # use back prop
+            results = F.log_softmax(results, dim=1) # gets the log softmax of the output of the ensemble model
+            kl_loss = criterion_kl(results, inner_results) # calculate the loss
+            kl_loss.backward(retain_graph=True) # use back prop
+            optimizer.step() # update the model weights
+            optimizer.zero_grad() # set the optimizer grad to zero
+
+"""
+complete a forward pass through the model without storing the gradient
+"""
 def test(x, model):
       with th.no_grad():
             results = []
@@ -338,7 +392,9 @@ def test(x, model):
       return results
 
 
-
+"""
+compare labels with predicted labels and get the AUC as well as true_p, flase_p, true_n and false_n
+"""
 def performance_assess(y, results):
       true_positive = 0
       false_positive = 0
@@ -363,20 +419,34 @@ def performance_assess(y, results):
 
       return AUC_score, true_positive, false_positive, true_negative, false_negative
 
+"""
+get predictions from the test of a model
+"""
+def get_predictions(x_batch, inner_model):
+      with th.no_grad():
+            results = (to_softmax((inner_model(th.tensor(x_batch).to(device))).cpu()))
+
+      return results
 
 
-def train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer):
+"""
+train a model on a specific inner fold within an outer fold.
+can be set to include or exclude validation set as neccessary.
+"""
+def train_inner_model(train_outer_fold, train_inner_fold, model, criterion, optimizer, final_model=0):
       # run through all the epochs
       for epoch in range(NUM_EPOCHS):
 
             print("epoch=", epoch)
 
             # get the train fold
-            batch = extract_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
-            batch_data = batch[:,0] # get the data from the batch
-            batch_labels = batch[:,1] # get the labels from the batch
+            batch_data, batch_labels = extract_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
 
-            print("batch=", batch.shape)
+            if final_model == 1:
+                  val_batch_data, val_batch_labels = extract_val_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
+                  batch_data = np.concatenate((batch_data, val_batch_data))
+                  batch_labels = np.concatenate((batch_labels, val_batch_labels))
+            print("batch=", batch_data.shape)
             
             # break the data into segments load_batch_size long
             for i in range(int(np.ceil(len(batch_data)/LOAD_BATCH_SIZE))):
@@ -389,21 +459,23 @@ def train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)
                   gc.collect()
 
 
-            del batch_data, batch_labels, batch
+            del batch_data, batch_labels
             gc.collect()
 
       pickle.dump(model, open(MODEL_PATH + "resnet_" + MELSPEC + str(train_outer_fold) + "_inner_fold_" + str(train_inner_fold), 'wb')) # save the model
 
 
-
-def train_model_outer_fold(train_outer_fold, model, criterion, optimizer):
+"""
+trains a model for each outer fold using all data in that fold
+"""
+def train_model_outer_fold(train_outer_fold, model, criterion, optimizer, final_model=0):
       # run through all the epochs
       for epoch in range(NUM_EPOCHS):
 
             print("epoch=", epoch)
 
             # get the train fold
-            batch = extract_all_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
+            batch = extract_all_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold, final_model)
             batch_data = batch[:,0] # get the data from the batch
             batch_labels = batch[:,1] # get the labels from the batch
 
@@ -426,18 +498,50 @@ def train_model_outer_fold(train_outer_fold, model, criterion, optimizer):
       pickle.dump(model, open((MODEL_PATH + "resnet_outer_only_" + MELSPEC + str(train_outer_fold)), 'wb')) # save the model
 
 
+"""
+trains the ensemble model on a specific outer and inner fold
+"""
+def train_ensemble_model(train_outer_fold, train_inner_fold, model, criterion_ce, criterion_kl, optimizer, final_model=0):
+      # get the train fold
+      batch_data, batch_labels = extract_train_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
 
+      # get the inner model
+      inner_model = pickle.load(open(MODEL_PATH + "resnet_" + MELSPEC + str(train_outer_fold) + "_inner_fold_" + str(train_inner_fold), 'rb')) # load in the model
+
+      if final_model == 1:
+            val_batch_data, val_batch_labels = extract_val_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
+            batch_data = np.concatenate((batch_data, val_batch_data))
+            batch_labels = np.concatenate((batch_labels, val_batch_labels))
+      
+      print("batch=", batch_data.shape)
+      
+      # break the data into segments load_batch_size long
+      for i in range(int(np.ceil(len(batch_data)/LOAD_BATCH_SIZE))):
+            print("Seq-batch=", i)
+            x_train, y_train = get_batch_of_data(batch_data, batch_labels, LOAD_BATCH_SIZE, i)
+            
+            ensemble_train(x_train, y_train, model, inner_model,  optimizer, criterion_ce, criterion_kl) # train the model on the current batch
+
+            del x_train, y_train 
+            gc.collect()
+
+
+      del batch_data, batch_labels
+      gc.collect()
+
+
+"""
+validates a model by testing its performance on the corresponding validation fold.
+"""
 def validate_model(model, train_outer_fold, train_inner_fold):
       # get the train fold
-      batch = extract_val_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
-      batch_data = batch[:,0] # get the data from the batch
-      batch_labels = batch[:,1] # get the labels from the batch
+      batch_data, batch_labels = extract_val_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
 
       AUC_for_k_fold = 0
       # break the data into segments load_batch_size long
       for i in range(int(np.ceil(len(batch_data)/LOAD_BATCH_SIZE))):
 
-            x_val, y_val = get_batch_of_data(batch_data, batch_labels, LOAD_BATCH_SIZE, i)
+            x_val, y_val = get_batch_of_data(batch_data, batch_labels, LOAD_BATCH_SIZE, i)            
 
 
             results = []
@@ -445,7 +549,7 @@ def validate_model(model, train_outer_fold, train_inner_fold):
                   with th.no_grad():
                         results.append(to_softmax((model(th.tensor(x_val[i]).to(device))).cpu()))
 
-            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_val, results, test_type='val') # check the accuracy of the model
+            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_val, results) # check the accuracy of the model
 
             AUC_for_k_fold += AUC
 
@@ -454,13 +558,12 @@ def validate_model(model, train_outer_fold, train_inner_fold):
 
       print("AUC for outer_fold", train_outer_fold, "and inner_fold", train_inner_fold, "=", AUC_for_k_fold )
 
-      del batch, batch_labels, x_val, y_val
+      del batch_labels, x_val, y_val
       gc.collect()
 
 
-
 """
-test a singular model on the test set.
+test a singular model on the corresponding test set.
 """
 def test_model(model, test_fold):
       #read in the test set
@@ -496,14 +599,11 @@ def test_model(model, test_fold):
       gc.collect()
 
 
-
 """
 test multiple models on the test set using the average decision among all models to make a prediction.
 """
 def test_models(models, test_fold):
-      test_batch = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
-      test_batch_data = test_batch[:,0]
-      test_batch_labels = test_batch[:,1]
+      test_batch_data, test_batch_labels = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
 
       AUC_for_k_fold = 0
       # break the data into segments load_batch_size long
@@ -512,13 +612,25 @@ def test_models(models, test_fold):
             
             x_test, y_test = get_batch_of_data(test_batch_data, test_batch_labels, LOAD_BATCH_SIZE, i)
 
-            results = test(x_test, models) # do a forward pass through the model
+            results = []
+            for model in models:
+                  results.append(test(x_test, model)) # do a forward pass through the models
 
+            # change all values to softmax
             for i in range(len(results)):
                   for j in range(len(results[i])):
                         results[i][j] = to_softmax(results[i][j])
+                        
+            final_results = results[0]
+            for i in range(1,len(results)):
+                  print("i=",i)
+                  for j in range(len(results[i])):
+                        final_results[j] += results[i][j]
 
-            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_test, results, test_type='test') # check the accuracy of the model
+            for i in range(len(final_results)):
+                  final_results[i] = final_results[i]/len(results)
+
+            AUC, true_pos, false_pos, true_neg, false_neg = performance_assess(y_test, final_results) # check the accuracy of the model
 
             AUC_for_k_fold += AUC
 
@@ -533,7 +645,7 @@ def test_models(models, test_fold):
       logging.info(logging_info)
 
 
-      del test_batch, test_batch_labels, x_test, y_test
+      del test_batch_labels, x_test, y_test
       gc.collect()
 
 
@@ -547,28 +659,56 @@ def test_models(models, test_fold):
 #######################################################
 
 
-
-if TRAIN_MODEL_FLAG == 1:
+"""
+train a model for each inner fold within each outer fold resulting in inner_fold*outer_fold number of models.
+trains only on training data.
+"""
+if TRAIN_INNER_MODEL_FLAG == 1:
       print("Beginning Training")
 
       for train_outer_fold in range(NUM_OUTER_FOLDS):
             print("train_outer_fold=", train_outer_fold)
             for train_inner_fold in range(NUM_INNER_FOLDS):
                   print("train_inner_fold=", train_inner_fold)
-                  model = ResNet_2layer(ResidualBlock1, [1, 1, 1, 1], num_classes=2)
+                  model = ResNet_4layer(ResidualBlock1, [1, 1, 1, 1], num_classes=2)
                   criterion = nn.CrossEntropyLoss()
                   optimizer = optim.Adam(model.parameters(), lr=0.0001)
-                  train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)        
+                  train_inner_model(train_outer_fold, train_inner_fold, model, criterion, optimizer, final_model=1)        
 
 
-
+"""
+train a model for each outer_fold
+can be set to either use both train and val data or just train data
+results in outer_fold number of models.
+"""
 if TRAIN_MODEL_OUTER_ONLY_FLAG == 1:
       for train_outer_fold in range(NUM_OUTER_FOLDS):
             print("train_outer_fold=", train_outer_fold)
             model = ResNet_4layer(ResidualBlock1, [1, 1, 1, 1], num_classes=2)
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=0.0001)
-            train_model_outer_fold(train_outer_fold, model, criterion, optimizer)        
+            train_model_outer_fold(train_outer_fold, model, criterion, optimizer, final_model=1)        
+
+
+"""
+trains an ensemble model using the inner models and the original data
+"""
+if TRAIN_ENSEMBLE_MODEL_FLAG == 1:
+      print("Beginning Training")
+
+      for train_outer_fold in range(NUM_OUTER_FOLDS):
+            print("train_outer_fold=", train_outer_fold)
+            model = ResNet_4layer(ResidualBlock1, [1, 1, 1, 1], num_classes=2)
+            criterion_ce = nn.CrossEntropyLoss()
+            criterion_kl = nn.KLDivLoss()
+            optimizer = optim.Adam(model.parameters(), lr=0.0001)
+            for epoch in range(NUM_EPOCHS):
+                  for train_inner_fold in range(NUM_INNER_FOLDS):
+                        print("train_inner_fold=", train_inner_fold)
+                        train_ensemble_model(train_outer_fold, train_inner_fold, model, criterion_ce, criterion_kl, optimizer, final_model=0)
+
+                  pickle.dump(model, open((MODEL_PATH + "ensemble_resnet_" + MELSPEC + "outer_fold_" + str(train_outer_fold)), 'wb')) # save the model      
+
 
 
 
@@ -587,19 +727,10 @@ if PRUNE_MODEL_FLAG == 1:
             pickle.dump(pruned_model, open(MODEL_PATH + "resnet_" + MELSPEC + str(prune_fold) + "_pruned", 'wb')) # save the model
 
 
-
-# wont work rn
-if STUDENT_MODEL_FLAG == 1:
-      print("Creating student model")
-      for train_fold in range(NUM_OUTER_FOLDS):
-            model = ResNet_2layer(ResidualBlock1, [1,1,1,1], num_classes=2).to(device)
-            criterion = nn.CrossEntropyLoss()
-            optimizer = optim.Adam(model.parameters(), lr=0.0001)
-            print("Student train_fold=", train_fold)
-            train_model(train_outer_fold, train_inner_fold, model, criterion, optimizer)   
-
-
-
+"""
+used for inner fold based models only.
+validates each model by assessing its performance on its corresponding validation set.
+"""
 if VAL_MODEL_TEST_FLAG == 1:
       print("Beginning Model Validation")
       for train_outer_fold in range(NUM_OUTER_FOLDS):
@@ -612,69 +743,50 @@ if VAL_MODEL_TEST_FLAG == 1:
                   validate_model(model, train_outer_fold, train_inner_fold)
 
 
-
-# wont work rn
-if TEST_MODEL_FLAG == 1:
+"""
+test inner fold models on the corresponding test set
+"""
+if TEST_INNER_MODEL_FLAG == 1:
       print("Beginning Testing")
+      # pass through all the outer folds
       for test_outer_fold in range(NUM_OUTER_FOLDS):
             print("test_outer_fold=", test_outer_fold)
             
-            # get all the models
-            models = []
+            # for each outer fold pass through all the inner folds
             for test_inner_fold in range(NUM_INNER_FOLDS):
                   print("test_inner_fold=", test_inner_fold)
+                  model = pickle.load(open(MODEL_PATH + "resnet_" + MELSPEC + str(test_outer_fold) + "_inner_fold_" + str(test_inner_fold), 'rb')) # load in the model
+                  test_model(model, test_outer_fold)
+
+
+"""
+Use the average of all inner fold model predictions to make predictions.
+"""
+if TEST_INNER_ENSEMBLE_MODELS_FLAG == 1:
+      print("Beginning Testing")
+      # pass through all the outer folds
+      for test_outer_fold in range(NUM_OUTER_FOLDS):
+            print("test_outer_fold_ensemble=", test_outer_fold)
+            
+            # for each outer fold pass through all the inner folds
+            models = []
+            for test_inner_fold in range(NUM_INNER_FOLDS):
                   models.append(pickle.load(open(MODEL_PATH + "resnet_" + MELSPEC + str(test_outer_fold) + "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
             
-            test_models(models, test_outer_fold, 1)
+            test_models(models, test_outer_fold)
 
 
 
+"""
+test the performance of all outer_fold based models
+"""
 if TEST_OUTER_ONLY_MODEL_FLAG == 1:
       print("Beginning Testing")
       for test_outer_fold in range(NUM_OUTER_FOLDS):
             print("test_outer_fold=", test_outer_fold)
 
-            model = (pickle.load(open(MODEL_PATH + "resnet_outer_only_" + MELSPEC + str(test_outer_fold), 'rb'))) # load in the model
+            #model = (pickle.load(open(MODEL_PATH + "resnet_outer_only_" + MELSPEC + str(test_outer_fold), 'rb'))) # load in the model
+            
+            model = (pickle.load(open(MODEL_PATH + "ensemble_resnet_" + MELSPEC + "outer_fold_" + str(test_outer_fold), 'rb'))) # load in the model
             
             test_model(model, test_outer_fold)
-
-
-
-# wont work rn
-if TEST_STUDENT_MODEL_FLAG == 1:
-      print("Testing student model")
-      for test_fold in range(NUM_OUTER_FOLDS):
-            print("test_fold=", test_fold)
-            model = pickle.load(open((MODEL_PATH + "student_resnet_" + MELSPEC + str(test_fold)), 'rb')) # load in the model
-            test_models(model, test_fold, 1)
-
-
-
-# real clunky delete later
-if GENERATE_GRAPH_FLAG == 1:
-      infile = "log.txt"
-
-      important = []
-
-      with open(infile) as f:
-            f = f.readlines()
-
-      fold = []
-      size_of_original_model = []
-      performance = []
-      for line in f:
-            seperated_line = line.split(", ")
-            fold.append(seperated_line[1].split("'")[1])
-            size_of_original_model.append(seperated_line[3])
-            performance.append(seperated_line[5].split("'")[1])
-
-      size_per_performance = []
-      average_performance = []
-      for i in range(int(len(fold)/3)):
-            size_per_performance.append(np.array(size_of_original_model[i*3], dtype=np.float128)*100)
-            average_performance.append((np.sum(np.array(performance[(i*3):(i*3+3)], dtype=np.float128))/3)*100)
-
-      plt.plot(size_per_performance, average_performance)
-      plt.xlabel('Percentage of original model')
-      plt.ylabel('Percentage average performance across all folds')
-      plt.show()
