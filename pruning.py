@@ -1,6 +1,6 @@
 import torch as th
 import torch.nn.utils.prune as prune
-from helper_scripts import nested_children
+from helper_scripts import *
 
 
 #https://github.com/sahandilshan/Simple-NN-Compression/blob/main/Simple_MNIST_Compression.ipynb
