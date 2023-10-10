@@ -31,8 +31,6 @@ MODEL_MELSPEC = "melspec_180"
 
 
 # set hyperpaperameters
-BATCH_SIZE = 128
-NUM_EPOCHS = 60
 NUM_OUTER_FOLDS = 3
 NUM_INNER_FOLDS = 4
 
@@ -42,35 +40,27 @@ TRAIN_OUTER_MODEL_FLAG = 0
 TRAIN_ENSEMBLE_MODEL_FLAG = 1
 
 # testing options for the models
-TEST_INNER_MODEL_FLAG = 0
 TEST_GROUP_DECISION_FLAG = 0
 TEST_OUTER_ONLY_MODEL_FLAG = 0
-TEST_ENSEMBLE_MODEL_FLAG = 0
+TEST_ENSEMBLE_MODEL_FLAG = 1
 VAL_MODEL_TEST_FLAG = 0
-VAL_MODEL_OUTER_TEST_FLAG = 0
 
 
 # Find gpu. If it cannot be found exit immediately
 device = "cuda" if th.cuda.is_available() else "cpu"
 print("device=", device)
 if device != "cuda":
-      print("exiting since cuda not enabled")
+      print("Cuda not enabled. Exiting...")
       exit(1)
 
-HIDDEN_LAYERS = [32,64]
-LAYERS = [1,2,3]
+HIDDEN_LAYERS = [32, 64, 128]
+LAYERS = [1, 2, 3]
+BEST_HIDDEN_LAYERS = [128, 64, 32]
+BEST_LAYERS = [3, 2, 1]
 
 """
-Validation model:   1-15    -hidden_layers=32, num_layers=1
-                    16-30   -hidden_layers=32, num_layers=2
-                    31-45   -hidden_layers=32, num_layers=3
-                    46-60   -hidden_layers=64, num_layers=1
-                    61-75   -hidden_layers=64, num_layers=2
-                    76-90   -hidden_layers=64, num_layers=3
-
+GD: 36 (128, 2, 0.5), 11 (32, 2, 0.5), 5 (32, 1, 0.5)
 """
-
-
 
 
 """
@@ -80,61 +70,147 @@ class bi_lstm(nn.Module):
     def __init__(self, hidden_dim, layers):
         super(bi_lstm, self).__init__()
         self.hidden_dim = hidden_dim
-        self.layers = layers
-        self.bi_lstm = nn.LSTM(input_size=180, hidden_size=hidden_dim, num_layers=layers, batch_first=True, bidirectional=True)
-        self.drop = nn.Dropout(p=0.5)
-        self.fc1 = nn.Linear(hidden_dim*2, hidden_dim)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_dim,2)
+        self.layers = layers        
+        if layers < 1:
+            self.bi_lstm = nn.LSTM(input_size=180, hidden_size=hidden_dim, num_layers=layers, batch_first=True, dropout=0.5, bidirectional=True)
+        else:
+            self.bi_lstm = nn.LSTM(input_size=180, hidden_size=hidden_dim, num_layers=layers, batch_first=True, bidirectional=True)
 
-    def forward(self, x):
+        self.drop1 = nn.Dropout(p=0.5)
+        self.batchnorm = nn.BatchNorm1d(self.hidden_dim * 2)
+        self.fc1 = nn.Linear(hidden_dim*2, 32)
+        self.mish = nn.Mish()
+        self.fc2 = nn.Linear(32,2)
+
+    def forward(self, x, lengths):
+        total_length = x.shape[1]
+        x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
         self.bi_lstm.flatten_parameters()
         out, (h_n, c_n) = self.bi_lstm(x)
-        out_forward = out[range(len(out)), (x.shape[1] - 1), :self.hidden_dim]
+        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=total_length)
+        
+        out_forward = out[range(len(out)), (np.array(lengths) - 1), :self.hidden_dim]
         out_reverse = out[range(len(out)), 0, self.hidden_dim:]
         out_reduced = th.cat((out_forward, out_reverse), dim=1)
-        result = self.drop(out_reduced)
+        
+        result = self.drop1(out_reduced)
+        result = self.batchnorm(result)
         result = self.fc1(result)
-        result = self.relu(result)
+        result = self.mish(result)
         result = self.fc2(result)
-        return result
-
+        return result 
 
 
 """
-Create a bi_lstm package including:
+Create a bi_lstm package including
 Model
-Optimizer(Adam)
+Optimizer(RMSprop)
 Model name
 """
 class bi_lstm_package():
-    def __init__(self, hidden_dim, layers):
+    def __init__(self, hidden_dim, layers, outer, inner, folder, epochs, batch_size, model_type):
+        self.name = "bi_lstm_"
+        self.seed = th.seed()
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.model_type = model_type
+        self.outer = outer
+        self.inner = inner
+        self.folder = folder
+        
         self.model = bi_lstm(hidden_dim, layers)
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
-        self.model_name = "bi_lstm_"
- 
+        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4, weight_decay=1e-4)
+        self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=30)
+
+    def train(self):
+        if self.inner == None:
+                data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
+        else:
+                data, labels = extract_inner_fold_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
+
+        data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
+        
+        # run through all the epochs
+        for epoch in range(self.epochs):
+            print("epoch=", epoch)
+            train(data, labels, lengths, self)
+
+        # collect the garbage
+        del data, labels, lengths
+        gc.collect()
+
+    def save(self):
+        pickle.dump(self, open("../models/tb/bi_lstm/" + self.model_type + "/" + self.folder + "/" + self.name + "melspec_180_outer_fold_" + str(self.outer) + 
+                    "_inner_fold_" + str(self.inner), 'wb')) # save the model
+        
+    def val(self):
+        data, labels, names = extract_val_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
+
+        # preprocess data and get batches
+        data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+
+        results = []
+        for i in range(len(data)):
+            with th.no_grad():
+                results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
+
+        results = np.vstack(results)
+        labels = np.vstack(labels)
+
+        unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+        results = out[:,1]
+        labels = out[:,2]
+
+        fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
+        threshold = threshold[np.nanargmin(np.absolute(([1 - tpr] - fpr)))]
+
+        return results, labels, threshold
+    
+    def test(self):
+        # read in the test set
+        test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", self.outer)
+
+        # preprocess data and get batches
+        test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, "linear", self.batch_size)
+
+        results = []
+        for i in range(len(test_data)):
+            with th.no_grad():
+                results.append(to_softmax((self.model((test_data[i]).to(device), lengths[i])).cpu()))
+
+        results = np.vstack(results)
+        test_labels = np.vstack(test_labels)
+
+        unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
+        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
+        results = out[:,1]
+        test_labels = out[:,2]
+        
+        return results, test_labels
 
 
 """
 trains the ensemble model on a specific outer and inner fold
 """
-def train_ensemble_model(train_outer_fold, train_inner_fold, model, criterion_kl, epochs, working_folder, final_model=0):
+def train_ensemble_model(outer, model, criterion_kl, working_folder):
     # get the train fold
-    data, labels = extract_inner_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold, final_model)
-    
+    data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, outer)
+
     # grab model
-    inner_model = pickle.load(open(MODEL_PATH + "inner/" + str(working_folder) + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(train_outer_fold) + 
-                                        "_inner_fold_" + str(train_inner_fold) + "_final_model", 'rb')) # save the model
-
-    print("batch=", data.shape)
-    
-    data, labels = create_batches(data, labels, "linear", BATCH_SIZE)
+    models = []
+    for test_inner_fold in range(NUM_INNER_FOLDS):
+        models.append(pickle.load(open(MODEL_PATH + "GD/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(outer) + 
+                                "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
         
-    ensemble_train(data, labels, model, inner_model, criterion_kl) # train the model on the current batch
+    data, labels, lengths = create_batches(data, labels, "linear", 128)
+        
+    ensemble_train(data, labels, model, models, criterion_kl, lengths) # train the model on the current batch
 
-    del data, labels
+    del data, labels, lengths
     gc.collect()
+
 
 
 #************************MAIN*********************#
@@ -145,77 +221,72 @@ def main():
     
     """
     train a model for each inner fold within each outer fold resulting in inner_fold*outer_fold number of models.
-    trains only on training data.m
+    trains only on training data
     """
     if TRAIN_INNER_MODEL_FLAG == 1:
-        use_val = 1
-        for i in range(15): #this will be used to determine how many models should be made
-            if use_val == 0:
+        for hidden in HIDDEN_LAYERS:
+            for layer in LAYERS:
                 working_folder = create_new_folder(str(MODEL_PATH + "val/"))
-            else:
-                working_folder = create_new_folder(str(MODEL_PATH + "inner/"))
-            
-            for train_outer_fold in range(NUM_OUTER_FOLDS):
-                    print("train_outer_fold=", train_outer_fold)
+                print(working_folder)
+                
+                for outer in range(NUM_OUTER_FOLDS):
+                    print("train_outer_fold=", outer)
                     
-                    for train_inner_fold in range(NUM_INNER_FOLDS):
-                        print("train_inner_fold=", train_inner_fold)
-                        #print(HIDDEN_LAYERS[hidden], LAYERS[layer])
-                        lstm = bi_lstm_package(32,2)
-                        train_model(train_outer_fold, train_inner_fold, lstm, working_folder, NUM_EPOCHS, BATCH_SIZE, "linear", MODEL_PATH, final_model=use_val)
+                    for inner in range(NUM_INNER_FOLDS):
+                        print("train_inner_fold=", inner)
+
+                        model = bi_lstm_package(hidden, layer, outer, inner, working_folder, epochs=16, batch_size=128, model_type="val")
+                        model.train()
+                        model.save()
 
 
     """
     train a model for each outer_fold
-    can be set to either use both train and val data or just train data
-    results in outer_fold number of models.
     """
     if TRAIN_OUTER_MODEL_FLAG == 1:
-        use_val = 1
-        for i in range(15): #this will be used to determine how many models should be made
-            if use_val == 0:
-                working_folder = create_new_folder(str(MODEL_PATH + "val/"))
-            else:
-                working_folder = create_new_folder(str(MODEL_PATH + "outer/"))
-            
-            for train_outer_fold in range(NUM_OUTER_FOLDS):
-                    print("train_outer_fold=", train_outer_fold)
-                    lstm = bi_lstm_package(32, 2)
-                    train_model(train_outer_fold, None, lstm, working_folder, NUM_EPOCHS, BATCH_SIZE, "linear", MODEL_PATH, final_model=use_val)
+        working_folder = create_new_folder(str(MODEL_PATH + "OM/"))
+        print(working_folder)
+        
+        for outer in range(NUM_OUTER_FOLDS):
+            print("train_outer_fold=", outer)
+
+            model = bi_lstm_package(BEST_HIDDEN_LAYERS[outer], BEST_LAYERS[outer], outer, None, working_folder, epochs=16, batch_size=128, model_type="OM")
+            model.train()
+            model.save()
 
 
     """
     trains an ensemble model using the inner models and the original data
     """
     if TRAIN_ENSEMBLE_MODEL_FLAG == 1:
-        use_val = 1
-        for i in range(15):
+        folder_names = os.listdir(MODEL_PATH + "GD/")
+        folder_names.sort()
+        for i in range(len(folder_names)):
             print("Beginning Training")
-            if use_val == 0:
-                working_folder = create_new_folder(str(MODEL_PATH + "val/"))
-            else:
-                working_folder = create_new_folder(str(MODEL_PATH + "ensemble/"))
+            working_folder = create_new_folder(str(MODEL_PATH + "EM/"))
                 
-            for train_outer_fold in range(NUM_OUTER_FOLDS):
-                print("train_outer_fold=", train_outer_fold)
-                lstm = bi_lstm_package(32,2)
+            for outer in range(NUM_OUTER_FOLDS):
+                print("train_outer_fold=", outer)
+                lstm = bi_lstm_package(BEST_HIDDEN_LAYERS[outer], BEST_LAYERS[outer], outer, None, working_folder, epochs=16, batch_size=128, model_type="EM")
                 criterion_kl = nn.KLDivLoss()
                 
-                for epoch in range(NUM_EPOCHS):
-                    for train_inner_fold in range(NUM_INNER_FOLDS):
-                        print("train_inner_fold=", train_inner_fold)
-                        train_ensemble_model(train_outer_fold, train_inner_fold, lstm, criterion_kl, NUM_EPOCHS, working_folder,final_model=use_val)
+                for epoch in range(16):
+                    print("epoch=", epoch)
 
-                    pickle.dump(lstm.model, open((MODEL_PATH + "ensemble/" + working_folder + "/" + lstm.model_name + MODEL_MELSPEC + "_outer_fold_" 
-                                                    + str(train_outer_fold)), 'wb')) # save the model
+                    train_ensemble_model(outer, lstm, criterion_kl, folder_names[i])
 
-   
-   
+                pickle.dump(lstm, open((MODEL_PATH + "EM/" + working_folder + "/" + lstm.name + MODEL_MELSPEC + "_outer_fold_" 
+                                                    + str(outer)), 'wb')) # save the model
+
+
+
+
+
+
     ########################## VAL FUNCTIONS ##############################
       
       
     """
-    used for inner fold based models only.
     validates each model by assessing its performance on its corresponding validation set.
     """
     if VAL_MODEL_TEST_FLAG == 1:
@@ -223,205 +294,138 @@ def main():
         folder_names = os.listdir(MODEL_PATH + "val/")
         folder_names.sort()
         print(folder_names)
+        best_fold0, best_fold1, best_fold2 = 0, 0, 0
 
-        average_auc_0, average_auc_1, average_auc_2 = 0,0,0
-        average_sens_0, average_sens_1, average_sens_2 = 0,0,0
-        average_spec_0, average_spec_1, average_spec_2 = 0,0,0
-        count = 0
-        auc_fold_0, auc_fold_1, auc_fold_2 = 0,0,0
+        for folder in folder_names: # pass through all the outer folds
+            auc = 0
+            for outer in range(NUM_OUTER_FOLDS):
+                print("val_outer_fold=", outer)
 
-        for i in range(len(folder_names)):
-                # pass through all the outer folds
-                for val_outer_fold in range(NUM_OUTER_FOLDS):
-                    #print("val_outer_fold=", val_outer_fold)
-                    
-                    # for each outer fold pass through all the inner folds
-                    for val_inner_fold in range(NUM_INNER_FOLDS):
-                            #print("val_inner_fold=", val_inner_fold)
-                            model = pickle.load(open(MODEL_PATH + "val/" + folder_names[i] + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(val_outer_fold) + 
-                                            "_inner_fold_" + str(val_inner_fold) + "_epochs_60", 'rb')) # load in the model
-                            auc, sens, spec = validate_model(model, val_outer_fold, val_inner_fold, "linear", BATCH_SIZE)
-                            
-                            if val_outer_fold == 0:
-                                average_auc_0 += auc
-                                average_sens_0 += sens
-                                average_spec_0 += spec
-                            elif(val_outer_fold == 1):
-                                average_auc_1 += auc
-                                average_sens_1 += sens
-                                average_spec_1 += spec
-                            elif(val_outer_fold == 2):
-                                average_auc_2 += auc
-                                average_sens_2 += sens
-                                average_spec_2 += spec
+                for inner in range(NUM_INNER_FOLDS): # for each outer fold pass through all the inner folds
+                    model = pickle.load(open(MODEL_PATH + "val/" + folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(outer) + 
+                                    "_inner_fold_" + str(inner), 'rb')) # load in the model
+                    th.manual_seed(model.seed) #set the seed to be the same as the one the model was generated on
 
+                    results, test_labels, threshold = model.val()
+                    auc += roc_auc_score(test_labels, results)
 
+                if best_fold0 < auc/4 and outer == 0:
+                    best_fold0 = auc/4
+                    folder0 = folder
+                
+                if best_fold1 < auc/4 and outer == 1:
+                    best_fold1 = auc/4
+                    folder1 = folder
 
-                count +=1
-                if count % 15 == 0:
-                    print(count)
-                    if auc_fold_0 < average_auc_0/(15*4):
-                        auc_fold_0 = average_auc_0/(15*4)
+                if best_fold2 < auc/4 and outer == 2:
+                    best_fold2 = auc/4
+                    folder2 = folder
 
-                    if auc_fold_1 < average_auc_1/(15*4):
-                        auc_fold_1 = average_auc_1/(15*4)
+                auc = 0  
 
-                    if auc_fold_2 < average_auc_2/(15*4):
-                        auc_fold_2 = average_auc_2/(15*4)
-                    print("Average auc fold 0:", average_auc_0/(15*4))
-                    #print("Average sens fold 0:", average_sens_0/(15*4))
-                    #print("Average spec fold 0:", average_spec_0/(15*4))
-                    print("Average auc fold 1:", average_auc_1/(15*4))
-                    #print("Average sens fold 1:", average_sens_1/(15*4))
-                    #print("Average spec fold 1:", average_spec_1/(15*4))
-                    print("Average auc fold 2:", average_auc_2/(15*4))
-                    #print("Average sens fold 2:", average_sens_2/(15*4))
-                    #print("Average spec fold 2:", average_spec_2/(15*4))
+            print("Folder 0:", folder0, "AUC:", best_fold0)
+            print("Folder 0:", folder1, "AUC:", best_fold1)
+            print("Folder 0:", folder2, "AUC:", best_fold2)
+            
 
-                    print("        ")
-
-                    average_auc_0, average_auc_1, average_auc_2 = 0,0,0
-                    average_sens_0, average_sens_1, average_sens_2 = 0,0,0
-                    average_spec_0, average_spec_1, average_spec_2 = 0,0,0
-
-        print("Max for fold 0", auc_fold_0)
-        print("Max for fold 1", auc_fold_1)
-        print("Max for fold 2", auc_fold_2)
-
-
-
-    """
-    used for inner fold based models only.
-    validates each model by assessing its performance on its corresponding validation set.
-    """
-    if VAL_MODEL_OUTER_TEST_FLAG == 1:
-        print("Beginning Validation")
-        folder_names = os.listdir(MODEL_PATH + "val/")
-        folder_names.sort()
-        print(folder_names)
-
-        average_auc_0, average_auc_1, average_auc_2 = 0,0,0
-        average_sens_0, average_sens_1, average_sens_2 = 0,0,0
-        average_spec_0, average_spec_1, average_spec_2 = 0,0,0
-        count = 0
-
-        for i in range(len(folder_names)):
-                # pass through all the outer folds
-                for val_outer_fold in range(NUM_OUTER_FOLDS):
-                    #print("val_outer_fold=", val_outer_fold)
-                    model = pickle.load(open(MODEL_PATH + "val/" + folder_names[i] + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(val_outer_fold) + 
-                                    "_inner_fold_" + str(None) + "_epochs_15", 'rb')) # load in the model
-                    auc, sens, spec = validate_model(model, val_outer_fold, None, "linear", BATCH_SIZE)
-                    
-                    if val_outer_fold == 0:
-                        average_auc_0 += auc
-                        average_sens_0 += sens
-                        average_spec_0 += spec
-                    elif(val_outer_fold == 1):
-                        average_auc_1 += auc
-                        average_sens_1 += sens
-                        average_spec_1 += spec
-                    elif(val_outer_fold == 2):
-                        average_auc_2 += auc
-                        average_sens_2 += sens
-                        average_spec_2 += spec
-
-
-
-                count +=1
-                if count % 15 == 0:
-                    print(count)
-                    auc_fold_0, auc_fold_1, auc_fold_2 = 0,0,0
-                    if auc_fold_0 < average_auc_0/(15):
-                        auc_fold_0 = average_auc_0/(15)
-
-                    if auc_fold_1 < average_auc_1/(15):
-                        auc_fold_1 = average_auc_1/(15)
-
-                    if auc_fold_2 < average_auc_2/(15):
-                        auc_fold_2 = average_auc_2/(15)
-                    print("Average auc fold 0:", average_auc_0/(15))
-                    #print("Average sens fold 0:", average_sens_0/(15*4))
-                    #print("Average spec fold 0:", average_spec_0/(15*4))
-                    print("Average auc fold 1:", average_auc_1/(15))
-                    #print("Average sens fold 1:", average_sens_1/(15*4))
-                    #print("Average spec fold 1:", average_spec_1/(15*4))
-                    print("Average auc fold 2:", average_auc_2/(15))
-                    #print("Average sens fold 2:", average_sens_2/(15*4))
-                    #print("Average spec fold 2:", average_spec_2/(15*4))
-
-                    print("        ")
-
-                    average_auc_0, average_auc_1, average_auc_2 = 0,0,0
-                    average_sens_0, average_sens_1, average_sens_2 = 0,0,0
-                    average_spec_0, average_spec_1, average_spec_2 = 0,0,0
-
-        print("Max for fold 0", auc_fold_0)
-        print("Max for fold 1", auc_fold_1)
-        print("Max for fold 2", auc_fold_2)
 
 
 
     ########################## TEST FUNCTIONS ##############################
 
-
-    """
-    test inner fold models on the corresponding test set
-    """
-    if TEST_INNER_MODEL_FLAG == 1:
-        print("Beginning Testing")
-        folder_names = os.listdir(MODEL_PATH + "inner/")
-        folder_names.sort()
-        for working_folder in folder_names:
-            # pass through all the outer folds
-            for test_outer_fold in range(NUM_OUTER_FOLDS):
-                    print("test_outer_fold=", test_outer_fold)
-                    
-                    # for each outer fold pass through all the inner folds
-                    for test_inner_fold in range(NUM_INNER_FOLDS):
-                        print("test_inner_fold=", test_inner_fold)
-                        model = pickle.load(open(MODEL_PATH + "inner/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(test_outer_fold) + 
-                                            "_inner_fold_" + str(test_inner_fold) + "_final_model", 'rb')) # load in the model
-                        test_model(model, test_outer_fold, "linear", BATCH_SIZE)
-
-
+    
     """
     test the performance of all outer_fold based models
     """
     if TEST_OUTER_ONLY_MODEL_FLAG == 1:
-        print("Beginning Testing")
-        folder_names = os.listdir(MODEL_PATH + "outer/")
+        print("Beginning Outer Model Testing")
+        folder_names = os.listdir(MODEL_PATH + "OM/")
         folder_names.sort()
+        auc, sens, spec = np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64)
+        threshold = [0.6090625404465824, 0.490797293445992, 0.5695457850370491]
         for working_folder in folder_names:
-            # pass through all the outer folds
-            for test_outer_fold in range(NUM_OUTER_FOLDS):
-                print("test_outer_fold=", test_outer_fold)
-                model = pickle.load(open(MODEL_PATH + "outer/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(test_outer_fold)
-                                            + "_inner_fold_None"    + "_final_model", 'rb')) # load in the model
-                test_model(model, test_outer_fold, "linear", BATCH_SIZE)
+                # pass through all the outer folds
+                for outer in range(NUM_OUTER_FOLDS):
+                    print("test_outer_fold=", outer)
+                    model = pickle.load(open(MODEL_PATH + "OM/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(outer)
+                                                + "_inner_fold_None", 'rb')) # load in the model
+                    th.manual_seed(model.seed)
+                    result, label = model.test() # test the model
+
+                    print(threshold)
+                    auc[outer] = roc_auc_score(label, result)
+                    results = (np.array(result)>threshold[outer]).astype(np.int8)
+                    sens[outer], spec[outer] = calculate_sens_spec(label, results)
+
+                print("AUC:", np.mean(auc), "var:", np.var(auc))
+                print("sens:", np.mean(sens), "var:", np.var(sens))
+                print("spec:", np.mean(spec), "var:", np.var(spec))
+
 
 
     """
     Use the average of all inner fold model predictions to make predictions.
     """
     if TEST_GROUP_DECISION_FLAG == 1:
-        print("Beginning Testing")
-        folder_names = os.listdir(MODEL_PATH + "inner/")
+        print("Beginning Group Decision Model Testing")
+        folder_names = os.listdir(MODEL_PATH + "GD/")
         folder_names.sort()
+        auc, sens, spec = np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64)
+        for working_folder in folder_names:
+            # pass through all the outer folds
+            print(working_folder)
+            
+            for outer in range(NUM_OUTER_FOLDS):
+                print("test_outer_fold_ensemble=", outer)
+                
+                # for each outer fold pass through all the inner folds
+                results, thresholds = [], []
+                for test_inner_fold in range(NUM_INNER_FOLDS):
+                    model = pickle.load(open(MODEL_PATH + "GD/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(outer) + 
+                                        "_inner_fold_" + str(test_inner_fold), 'rb')) # load in the model
+                    th.manual_seed(model.seed) # set the seed to be the same as the one the model was generated on
+                    
+                    _, _, threshold = model.val() # get the threshold
+                    result, label = model.test() # test the model
+                    
+                    results.append(result)
+                    thresholds.append(threshold)
+
+                results = np.mean(np.vstack(np.array(results)), axis=0)
+                threshold = np.mean(thresholds)
+                print(threshold)
+                auc[outer] = roc_auc_score(label, results)
+                results = (np.array(results)>threshold).astype(np.int8)
+                sens[outer], spec[outer] = calculate_sens_spec(label, results)
+
+            print("AUC:", np.mean(auc), "var:", np.var(auc))
+            print("sens:", np.mean(sens), "var:", np.var(sens))
+            print("spec:", np.mean(spec), "var:", np.var(spec))
+    
+    """
+    test the performance of all ensemble models
+    """
+    if TEST_ENSEMBLE_MODEL_FLAG == 1:
+        print("Beginning Ensemble Model Testing")
+        folder_names = os.listdir(MODEL_PATH + "EM/")
+        folder_names.sort()
+        threshold = [0.6090625404465824, 0.490797293445992, 0.5695457850370491]
+        auc, sens, spec = np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64)
         for working_folder in folder_names:
                 # pass through all the outer folds
-                print(int(working_folder))
-                for test_outer_fold in range(NUM_OUTER_FOLDS):
-                        print("test_outer_fold_ensemble=", test_outer_fold)
-                        
-                        # for each outer fold pass through all the inner folds
-                        models = []
-                        for test_inner_fold in range(NUM_INNER_FOLDS):
-                            models.append(pickle.load(open(MODEL_PATH + "inner/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(test_outer_fold) + 
-                                                "_inner_fold_" + str(test_inner_fold) + "_final_model", 'rb'))) # load in the model
-                        
-                        test_models(models, test_outer_fold, "linear", BATCH_SIZE)
+                for outer in range(NUM_OUTER_FOLDS):
+                    print("test_outer_fold=", outer)
+                    model = pickle.load(open(MODEL_PATH + "EM/" + working_folder + "/bi_lstm_" + MODEL_MELSPEC + "_outer_fold_" + str(outer), 'rb')) # load in the model
+                    th.manual_seed(model.seed)
+                    result, label = model.test() # test the model
+                    print(threshold)
+                    auc[outer] = roc_auc_score(label, result)
+                    results = (np.array(result)>threshold[outer]).astype(np.int8)
+                    sens[outer], spec[outer] = calculate_sens_spec(label, results)
 
+        print("AUC:", np.mean(auc), "var:", np.var(auc))
+        print("sens:", np.mean(sens), "var:", np.var(sens))
+        print("spec:", np.mean(spec), "var:", np.var(spec))
 
 
 if __name__ == "__main__":

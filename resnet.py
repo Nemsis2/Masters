@@ -339,7 +339,7 @@ class ResNet_4layer(nn.Module):
         return nn.Sequential(*layers)
     
 
-    def forward(self, x):
+    def forward(self, x, length):
         """
         Computes the forward pass through the model.
 
@@ -465,7 +465,7 @@ class ResNet_4layer_3deep(nn.Module):
         return nn.Sequential(*layers)
     
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         """
         Computes the forward pass through the model.
 
@@ -588,7 +588,7 @@ class ResNet_2layer(nn.Module):
         return nn.Sequential(*layers)
     
 
-    def forward(self, x):
+    def forward(self, x, lengths):
         """
         Computes the forward pass through the model.
 
