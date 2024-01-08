@@ -276,7 +276,7 @@ class ResNet_4layer(nn.Module):
         forward : completes a forward pass through the model.
 
     """
-    def __init__(self, block,layers , num_classes = 10):
+    def __init__(self, block, layers, num_classes = 10):
         """
         Initialize the 4 layer deep resnet.
     

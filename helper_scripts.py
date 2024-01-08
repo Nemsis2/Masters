@@ -234,5 +234,5 @@ def get_optimal_threshold(y, results):
       fpr, tpr, threshold = roc_curve(y, results, pos_label=1)
       fnr = 1 - tpr
       optimal_threshold = threshold[np.nanargmin(np.absolute((fnr - fpr)))]
-
+      
       return optimal_threshold

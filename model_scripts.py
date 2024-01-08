@@ -8,6 +8,7 @@ from helper_scripts import *
 from data_grab import *
 from data_preprocessing import *
 from sklearn.metrics import roc_auc_score
+from get_best_features import *
 
 # set the device
 device = "cuda" if th.cuda.is_available() else "cpu"
@@ -95,6 +96,36 @@ def train_model(train_outer_fold, train_inner_fold, model, working_folder, epoch
             data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
       else:
             data, labels = extract_inner_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
+
+      data, labels, lengths = create_batches(data, labels, interpolate, batch_size)
+      
+      # run through all the epochs
+      for epoch in range(epochs):
+            print("epoch=", epoch)
+            train(data, labels, lengths, model)
+
+      # collect the garbage
+      del data, labels, lengths
+      gc.collect()
+
+      save_model(model, working_folder, train_outer_fold, train_inner_fold, epochs, model_path, MODEL_MELSPEC)
+
+"""
+train a model on a specific inner fold within an outer fold.
+"""
+def train_model_on_features(train_outer_fold, train_inner_fold, model, working_folder, epochs, batch_size, interpolate, num_features, model_path):
+      if train_inner_fold == None:
+            data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
+      else:
+            data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
+
+      features = dataset_fss(num_features)
+
+      for i in range(len(data)):
+            chosen_features = []
+            for feature in features:
+                chosen_features.append(np.asarray(data[i][:,feature]))
+            data[i] = th.as_tensor(np.stack(chosen_features, -1))
 
       data, labels, lengths = create_batches(data, labels, interpolate, batch_size)
       
@@ -264,6 +295,51 @@ uses group decision making to make predictions per patient.
 """
 def test_models_patients(models, test_fold, interpolate, batch_size, threshold):
       test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
+      
+      # preprocess data and get batches
+      test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, interpolate, batch_size)
+            
+      results = []
+      for model in models:
+            results.append(test(test_data, model.model, lengths)) # do a forward pass through the models
+
+      for i in range(len(results)):
+            results[i] = np.vstack(results[i])
+
+      test_labels = np.vstack(test_labels)
+
+      for i in range(len(results)):
+            unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq,np.bincount(ids,results[i][:,0])/count, np.bincount(ids,test_labels[:,0])/count))
+            results[i] = out[:,1]
+
+      test_labels = out[:,2]
+
+      # total the predictions over all models
+      results = sum(results)/4
+      auc = roc_auc_score(test_labels, results)
+      results = (np.array(results)>threshold).astype(np.int8)
+      sens, spec = calculate_sens_spec(test_labels, results)
+
+      del test_data, test_labels, test_names, results, lengths
+      gc.collect()
+
+      return auc, sens, spec
+
+
+"""
+uses group decision making to make predictions per patient.
+"""
+def test_models_patients_on_select(models, num_features, test_fold, interpolate, batch_size, threshold):
+      test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
+
+      features = dataset_fss(num_features)
+
+      for i in range(len(test_data)):
+            chosen_features = []
+            for feature in features:
+                chosen_features.append(np.asarray(test_data[i][:,feature]))
+            test_data[i] = th.as_tensor(np.stack(chosen_features, -1))
       
       # preprocess data and get batches
       test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, interpolate, batch_size)

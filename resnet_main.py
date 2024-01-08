@@ -39,7 +39,7 @@ if device != "cuda":
 
 # set paths
 K_FOLD_PATH = "../data/tb/combo/multi_folds/"
-MODEL_PATH = "../models/tb/resnet6_2/"
+MODEL_PATH = "../models/tb/resnet6_4/"
 
 MELSPEC = "180_melspec_fold_"
 MODEL_MELSPEC = "melspec_180"
@@ -49,16 +49,19 @@ BATCH_SIZE = 128
 NUM_EPOCHS = 16
 NUM_OUTER_FOLDS = 3
 NUM_INNER_FOLDS = 4
+NUM_FEATURES = 150
 
 # training options for the models
 TRAIN_INNER_MODEL_FLAG = 0
+TRAIN_INNER_FSS_MODEL_FLAG = 1
 TRAIN_OUTER_MODEL_FLAG = 0
-TRAIN_ENSEMBLE_MODEL_FLAG = 1
+TRAIN_ENSEMBLE_MODEL_FLAG = 0
 
 # testing options for the models
-TEST_GROUP_DECISION_FLAG = 1
-TEST_OUTER_ONLY_MODEL_FLAG = 1
-TEST_ENSEMBLE_MODEL_FLAG = 1
+TEST_GROUP_DECISION_FLAG = 0
+TEST_GROUP_FSS__DECISION_FLAG = 1
+TEST_OUTER_ONLY_MODEL_FLAG = 0
+TEST_ENSEMBLE_MODEL_FLAG = 0
 VAL_MODEL_TEST_FLAG = 0
 
 
@@ -170,7 +173,21 @@ def main():
                         for train_inner_fold in range(NUM_INNER_FOLDS):
                               print("train_inner_fold=", train_inner_fold)
                               model = Resnet18()
-                              train_model(train_outer_fold, train_inner_fold, model, working_folder, NUM_EPOCHS, BATCH_SIZE, "image", MODEL_PATH + "val/")        
+                              train_model(train_outer_fold, train_inner_fold, model, working_folder, NUM_EPOCHS, BATCH_SIZE, "image", MODEL_PATH + "val/")  
+
+      
+      if TRAIN_INNER_FSS_MODEL_FLAG == 1:
+        working_folder = create_new_folder(str(MODEL_PATH + "GD_" + str(NUM_FEATURES) + "/"))
+        print(working_folder)
+        
+        for outer in range(NUM_OUTER_FOLDS):
+            print("train_outer_fold=", outer)
+            
+            for inner in range(NUM_INNER_FOLDS):
+                print("train_inner_fold=", inner)
+
+                model = Resnet6_4Deep()
+                train_model_on_features(outer, inner, model, working_folder, NUM_EPOCHS, BATCH_SIZE, "image", NUM_FEATURES, MODEL_PATH + "GD_" + str(NUM_FEATURES) + "/")  
 
 
       """
@@ -293,6 +310,37 @@ def main():
                                           "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
 
                         auc[outer], sens[outer], spec[outer] = test_models_patients(models, outer, "image", BATCH_SIZE, thresholds[outer])
+
+                  print("AUC:", np.mean(auc), "var:", np.var(auc))
+                  print("sens:", np.mean(sens), "var:", np.var(sens))
+                  print("spec:", np.mean(spec), "var:", np.var(spec))
+
+      
+      """
+      Use the average of all inner fold model predictions to make predictions.
+      """
+      if TEST_GROUP_FSS__DECISION_FLAG == 1:
+            print("Beginning Testing Group Decision")
+            folder_names = os.listdir(MODEL_PATH +"GD_" + str(NUM_FEATURES) + "/")
+            folder_names.sort()
+            #resnet_6_2Deep thresholds = [0.6148279251323806, 0.5092164112751074, 0.46910479619566886]
+            #resnet_6_4Deep thresholds = [0.6957424222451528, 0.618322073306822,0.43312809038823064]
+            thresholds = [0.5691165582675124, 0.617273574978484, 0.5697435768196426]
+            #resnet18 thresholds = [0.5535756670131251, 0.5219284197470794, 0.30767399159036685]
+            auc, sens, spec = np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64), np.array([1,2,3], dtype=np.float64)
+            for working_folder in folder_names:
+                  # pass through all the outer folds
+                  print(int(working_folder))
+                  for outer in range(NUM_OUTER_FOLDS):
+                        print("test group decision=", outer)
+                        
+                        # for each outer fold pass through all the inner folds
+                        models = []
+                        for test_inner_fold in range(NUM_INNER_FOLDS):
+                              models.append(pickle.load(open(MODEL_PATH + "GD_" + str(NUM_FEATURES) + "/" + working_folder + "/resnet_6_4Deep_" + MODEL_MELSPEC + "_outer_fold_" + str(outer) + 
+                                          "_inner_fold_" + str(test_inner_fold), 'rb'))) # load in the model
+
+                        auc[outer], sens[outer], spec[outer] = test_models_patients_on_select(models, NUM_FEATURES, outer, "image", BATCH_SIZE, thresholds[outer])
 
                   print("AUC:", np.mean(auc), "var:", np.var(auc))
                   print("sens:", np.mean(sens), "var:", np.var(sens))
