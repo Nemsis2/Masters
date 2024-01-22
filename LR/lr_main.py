@@ -1,14 +1,13 @@
 # libraries
 import torch as th
 import os
+import gc
 import pickle
 
 # custom scripts
 from helper_scripts import *
 from data_grab import *
 from data_preprocessing import *
-from pruning import *
-from model_scripts import *
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import roc_auc_score
@@ -24,7 +23,6 @@ author: Michael Knight
 # declare global variables
 
 # set paths
-#K_FOLD_PATH = "../data/tb/combo/multi_folds/"
 K_FOLD_PATH = "../data/tb/combo/multi_folds/"
 MODEL_PATH = "../models/tb/lr/"
 
