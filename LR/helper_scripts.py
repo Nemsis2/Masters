@@ -183,9 +183,9 @@ def patient_performance_assess(y, results, patients, optimal_threshold):
 
 
 """
-get the optimal decision threshold for the corresponding validation set
+get the EER decision threshold for the corresponding validation set
 """
-def get_optimal_threshold(y, results):
+def get_EER_threshold(y, results):
       fpr, tpr, threshold = roc_curve(y, results, pos_label=1)
       fnr = 1 - tpr
       optimal_threshold = threshold[np.nanargmin(np.absolute((fnr - fpr)))]

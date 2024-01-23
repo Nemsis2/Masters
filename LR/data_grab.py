@@ -55,12 +55,12 @@ def extract_outer_fold_data(path):
 
 
 """
-get val data for a specific inner and outer fold
+get dev data for a specific inner and outer fold
 """
-def extract_val_data(path, outer_fold, inner_fold):
+def extract_dev_data(path, inner_fold):
     batch = []
     # read in the data located at the path 
-    data = pickle.load(open(path + str(outer_fold) + ".pkl", 'rb'))
+    data = pickle.load(open(path, 'rb'))
 
     # zip the information from the dictionary into a list of arrays
     for inner_fold_key in data.keys():
@@ -81,10 +81,10 @@ def extract_val_data(path, outer_fold, inner_fold):
 """
 get the test data
 """
-def extract_test_data(path, fold):
+def extract_test_data(path):
     batch = []
     # read in the data located at the path 
-    data = pickle.load(open(path + str(fold) + ".pkl", 'rb'))
+    data = pickle.load(open(path, 'rb'))
 
     # zip the information from the dictionary into a list of arrays
     for patient_id in data.keys():

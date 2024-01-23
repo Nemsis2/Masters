@@ -1,6 +1,5 @@
 # libraries
 import torch as th
-import os
 import pickle
 
 # custom scripts
@@ -24,8 +23,13 @@ if device != "cuda":
       print("exiting since cuda not enabled")
       exit(1)
 
-def test_lr(feature_type, n_feature, model_type='val'):
+
+
+def test_lr(feature_type, n_feature, threshold, model_type='em'):
     """
+    Description:
+    ---------
+
     Inputs:
     ---------
 
@@ -34,13 +38,16 @@ def test_lr(feature_type, n_feature, model_type='val'):
 
     """
     for outer in range(NUM_OUTER_FOLDS):
-        print("Outer fold=", outer)
+        # grab all models to be tested for that outer fold
         models = []
-        for inner in range(NUM_INNER_FOLDS):
-            print("Inner fold=", inner)
-            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
-            models.append(pickle.load(open(model_path, 'rb'))) # load in the model
 
+        for inner in range(NUM_INNER_FOLDS):
+            # get the testing models
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            models.append(pickle.load(open(model_path, 'rb'))) # load in the model
+        
+
+        # grab the testing data
         k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
         data, labels, names = extract_test_data(k_fold_path)
         X = np.array([np.mean(x, axis=0) for x in data])
@@ -58,7 +65,7 @@ def test_lr(feature_type, n_feature, model_type='val'):
         # total the predictions over all models
         results = sum(output)/4
         auc = roc_auc_score(new_labels, results)
-        results = (np.array(results)>optimal_threshold).astype(np.int8)
+        results = (np.array(results)>threshold).astype(np.int8)
         sens, spec = calculate_sens_spec(new_labels, results)
 
     return auc, sens, spec
@@ -72,8 +79,15 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            #create models for validation (threshold calculation)
-            test_lr(feature_type, n_feature,'val')
-            
-            # create models for ensemble testing
-            test_lr(feature_type, n_feature,'em')
+            # get the optimal threshold based off the EER
+            threshold = get_decision_threshold(feature_type, n_feature, NUM_OUTER_FOLDS, NUM_INNER_FOLDS)
+
+            # test the em setup
+            auc, sens, spec = test_lr(feature_type, n_feature, threshold, 'em')
+
+            print(f'AUC for {n_feature}_{feature_type}: {auc}')
+            print(f'Sens for {n_feature}_{feature_type}: {sens}')
+            print(f'Spec for {n_feature}_{feature_type}: {spec}')
+
+if __name__ == "__main__":
+    main()

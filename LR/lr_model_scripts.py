@@ -1,9 +1,18 @@
+#libraries
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 import numpy as np
+import pickle
+
+# custom scripts
+from data_grab import extract_dev_data
+from helper_scripts import get_EER_threshold
 
 def grid_search_lr(X, y):
     """
+    Description:
+    ---------
+
     Inputs:
     ---------
         X: np.array of melspecs for each cough
@@ -39,6 +48,9 @@ def grid_search_lr(X, y):
 
 def gather_results(results, labels, names):
     """
+    Description:
+    ---------
+
     Inputs:
     ---------
         results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
@@ -56,3 +68,44 @@ def gather_results(results, labels, names):
     unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
     out = np.column_stack((unq,np.bincount(ids,results[:,1])/count, np.bincount(ids,labels)/count))
     return out[:,1], out[:,2]
+
+
+def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+    feature_type: (string) The type of feature used to train the model (melspec, mfcc, lfb)
+
+    n_features: (int) The number of features corresponding to the feature type (eg. 180 melspec features or 39 mfccs)
+
+    n_outer: (int) The number of outer folds in the k-fold cross validation
+
+    n_inner: (int) The number of inner folds in the k-fold cross validation
+
+    Outputs:
+    --------
+    avg_threshold: (float64) The average EER decision threshold over all models in the k-fold cross validation
+    """
+    avg_threshold = 0
+    for outer in range(n_outer): 
+        outer_avg_threshold = 0
+        for inner in range(n_inner):
+            # grab the dev models
+            dev_model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            dev_model = (pickle.load(open(dev_model_path, 'rb'))) # load in the model
+        
+            # grab the dev data
+            k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+            data, labels, names = extract_dev_data(k_fold_path, inner)
+            X = np.array([np.mean(x, axis=0) for x in data])
+            labels = labels.astype("int")
+
+            # make predictions and calculate the threshold based off the EER
+            results, val_labels = gather_results(dev_model.predict_proba(X), labels, names) # do a forward pass through the model
+            outer_avg_threshold += get_EER_threshold(val_labels, results)
+        avg_threshold += outer_avg_threshold/n_inner
+
+    return avg_threshold/n_outer

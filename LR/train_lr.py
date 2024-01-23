@@ -1,7 +1,6 @@
 # libraries
 import torch as th
 import os
-import gc
 import pickle
 
 # custom scripts
@@ -26,7 +25,18 @@ if device != "cuda":
       exit(1)
 
 
-def create_inner_lr(feature_type, n_feature, model_type='val'):
+def create_inner_lr(feature_type, n_feature, model_type='dev'):
+    """
+    Description:
+    ---------
+    
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
     model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
     
     if len(os.listdir(model_path)) == 0: # if the folder is empty
@@ -39,7 +49,7 @@ def create_inner_lr(feature_type, n_feature, model_type='val'):
                     print("Inner fold=", inner)
 
                     k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-                    if model_type == 'val':
+                    if model_type == 'dev':
                         data, labels = extract_inner_fold_data(k_fold_path, inner)
                     elif model_type =='em':
                         data, labels = extract_outer_fold_data(k_fold_path)
@@ -59,8 +69,8 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            #create models for validation (threshold calculation)
-            create_inner_lr(feature_type, n_feature,'val')
+            #create models for development (threshold calculation)
+            create_inner_lr(feature_type, n_feature,'dev')
             
             # create models for ensemble testing
             create_inner_lr(feature_type, n_feature,'em')
