@@ -14,6 +14,7 @@ def normalize(mspec, min_log_value = -80):
     
     return (mspec + _normer)/_normer
 
+
 def melspec(audio, sr, n_mels, n_fft, hop_length):
 
     melspec_ = librosa.feature.melspectrogram(y=audio, 
@@ -37,6 +38,7 @@ def mfcc(audio, sr, n_mfcc, n_fft, hop_length):
                                     n_mfcc=n_mfcc, 
                                     n_fft=n_fft, 
                                     hop_length=hop_length)
+
     if mfcc_.shape[-1] > 9:
         mfcc_delta = librosa.feature.delta(mfcc_)
         mfcc_delta_delta = librosa.feature.delta(mfcc_, order=2)

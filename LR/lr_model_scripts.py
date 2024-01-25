@@ -3,6 +3,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 import numpy as np
 import pickle
+from sklearn.metrics import roc_auc_score
 
 # custom scripts
 from data_grab import extract_dev_data
@@ -25,24 +26,21 @@ def grid_search_lr(X, y):
 
         best_clf.params: Optimal hyperparameters determined by the GridSearch
     """
-    X = np.array([np.mean(x, axis=0) for x in X])
-    y = y.astype("int")
     
     param_grid = {
-        'C':[0.01, 0.1, 1, 10],
+        'C':[ 1, 10],
         'l1_ratio':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     }
-
     model = LogisticRegression(C = 0.2782559402207126, 
     l1_ratio = 1, max_iter=1000000, 
     solver='saga', 
     penalty='elasticnet', 
     multi_class = 'multinomial', 
     n_jobs = -1,
-    tol=0.001)
+    tol=0.0001)
     clf = GridSearchCV(model, param_grid=param_grid, cv=3, verbose=True, n_jobs=-1)
     best_clf = clf.fit(X, y)
-
+    print(best_clf.best_params_)
     return best_clf, best_clf.best_params_
 
 
@@ -87,9 +85,9 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
 
     Outputs:
     --------
-    avg_threshold: (float64) The average EER decision threshold over all models in the k-fold cross validation
+    outer_threshold: (list) The average EER decision threshold over all inner models in each outer fold. Has length = num outer folds
     """
-    avg_threshold = 0
+    outer_threshold = []
     for outer in range(n_outer): 
         outer_avg_threshold = 0
         for inner in range(n_inner):
@@ -106,6 +104,25 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
             # make predictions and calculate the threshold based off the EER
             results, val_labels = gather_results(dev_model.predict_proba(X), labels, names) # do a forward pass through the model
             outer_avg_threshold += get_EER_threshold(val_labels, results)
-        avg_threshold += outer_avg_threshold/n_inner
+        outer_threshold.append(outer_avg_threshold/n_inner)
 
-    return avg_threshold/n_outer
+    return outer_threshold
+
+
+def labels_per_frame(data, labels):
+    """
+    Inputs:
+    ---------
+        data: np.array which contains melspec samples of each cough
+    
+        labels: list or array which contains a label for each value in the data np.array
+
+    Outputs:
+    --------
+        per_frame_label: np.array which contains a label for each frame 
+    """
+    per_frame_label = []
+    for i in range(len(labels)):
+        for j in range(data[i].shape[0]):
+            per_frame_label.append(labels[i])
+    return np.array(per_frame_label)

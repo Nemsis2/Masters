@@ -49,10 +49,21 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
                     print("Inner fold=", inner)
 
                     k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+                    print(k_fold_path)
                     if model_type == 'dev':
                         data, labels = extract_inner_fold_data(k_fold_path, inner)
                     elif model_type =='em':
                         data, labels = extract_outer_fold_data(k_fold_path)
+
+                    print(data[0].shape)
+                   
+                    # for by frame
+                    #labels = labels_per_frame(data, labels)
+                    #data = np.vstack(data)
+
+                    # for averaging
+                    data = np.array([np.mean(x, axis=0) for x in data])
+                    labels = labels.astype("int")
 
                     model, params = grid_search_lr(data, labels)
                     pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
@@ -64,7 +75,7 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
 def main():
     for feature_type in ['mfcc', 'melspec', 'lfb']:
         if feature_type == 'mfcc':
-            features = [13,26,39]
+            features = [13, 26, 39]
         elif feature_type == 'melspec' or feature_type == 'lfb':
             features = [80, 128, 180] 
         

@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import roc_auc_score
 from get_best_features import *
+from lr_model_scripts import *
 
 
 """
@@ -23,8 +24,8 @@ author: Michael Knight
 # declare global variables
 
 # set paths
-K_FOLD_PATH = "../data/tb/combo/multi_folds/"
-MODEL_PATH = "../models/tb/lr/"
+K_FOLD_PATH = "../../data/tb/combo/multi_folds/"
+MODEL_PATH = "../../models/tb/lr/old_melspec/"
 
 # choose which melspec we will be working on
 MELSPEC = "180_melspec_fold_"
@@ -45,7 +46,7 @@ DO_FSS = 0
 # testing options for the models
 TEST_GROUP_DECISION_FLAG = 1
 TEST_GROUP_FSS_DECISION_FLAG = 0
-VAL_MODEL_TEST_FLAG = 1
+VAL_MODEL_TEST_FLAG = 0
 
 # Hyperparameters
 BEST_C = [[10, 10, 10, 0.1],[0.01, 1, 10, 10],[1, 10, 10, 0.01]]
@@ -58,47 +59,6 @@ print("device=", device)
 if device != "cuda":
       print("exiting since cuda not enabled")
       exit(1)
-
-    
-def grid_search_lr(X, y):
-    param_grid = {
-        'C':[0.01, 0.1, 1, 10],
-        'l1_ratio':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    }
-
-    model = LogisticRegression(C = 0.2782559402207126, 
-    l1_ratio = 1, max_iter=1000000, 
-    solver='saga', 
-    penalty='elasticnet', 
-    multi_class = 'multinomial', 
-    n_jobs = -1)
-    clf = GridSearchCV(model, param_grid=param_grid, cv=3, verbose=True, n_jobs=-1)
-    best_clf = clf.fit(X, y)
-
-    return best_clf, clf.best_params_
-
-
-def gather_results(results, labels, names):
-    """
-    Inputs:
-    ---------
-        results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
-    
-        labels: list or array which contains a label for each value in the data
-
-        names: list or array of patient_id associated with each value in the data
-
-    Outputs:
-    --------
-        out[:,1]: averaged model prob predictions for each unique patient_id in names
-
-        out[:,2]: label associated with each value in out[:,1]
-    """
-
-    unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-    out = np.column_stack((unq,np.bincount(ids,results[:,1])/count, np.bincount(ids,labels)/count))
-    
-    return out[:,1], out[:,2]
 
 
 def get_oracle_thresholds(results, labels, threshold):
@@ -131,7 +91,8 @@ def validate_model(folder, outer_fold):
     """
     threshold, auc = 0, 0
     for inner_fold in range(NUM_INNER_FOLDS):
-        val_data, val_labels, val_names = extract_val_data(K_FOLD_PATH + MELSPEC, outer_fold, inner_fold)
+        k_fold_path = f'../../data/tb/combo/new/180_melspec_fold_{outer_fold}.pkl'
+        val_data, val_labels, val_names = extract_dev_data(k_fold_path, inner_fold)
         X = np.array([np.mean(x, axis=0) for x in val_data])
         val_labels = val_labels.astype("int")
         model = pickle.load(open(MODEL_PATH + "val/" + folder + "/lr_" + MODEL_MELSPEC + "_outer_fold_" + str(outer_fold) + 
@@ -139,10 +100,10 @@ def validate_model(folder, outer_fold):
 
         results, val_labels = gather_results(model.predict_proba(X), val_labels, val_names) # do a forward pass through the model
         fpr, tpr, thresholds = roc_curve(val_labels, results, pos_label=1)
-        sens_threshold, spec_threshold = get_oracle_thresholds(results, val_labels, thresholds)
-        threshold += sens_threshold
+        #sens_threshold, spec_threshold = get_oracle_thresholds(results, val_labels, thresholds)
+        #threshold += sens_threshold
         # get EER threshold
-        # threshold +=  get_optimal_threshold(val_labels, results)
+        threshold += get_EER_threshold(val_labels, results)
 
         auc += roc_auc_score(val_labels, results)
 
@@ -172,8 +133,9 @@ def test_model(folder, outer, optimal_threshold):
     for inner in range(NUM_INNER_FOLDS):
         models.append(pickle.load(open(MODEL_PATH + "GD/" + folder + "/lr_" + MODEL_MELSPEC + "_outer_fold_" + str(outer) + 
                                         "_inner_fold_" + str(inner), 'rb'))) # load in the model
-               
-    data, labels, names = extract_test_data(K_FOLD_PATH + TEST, outer)
+    
+    k_fold_path = f'../../data/tb/combo/new/test/test_dataset_melspec_180_fold_{outer}.pkl' 
+    data, labels, names = extract_test_data(k_fold_path)
     X = np.array([np.mean(x, axis=0) for x in data])
     labels = labels.astype("int")
 
@@ -264,7 +226,7 @@ def main():
                 train_data = np.array([np.mean(x, axis=0) for x in train_data])
                 train_labels = train_labels.astype("int")
                 
-                val_data, val_labels, val_names = extract_val_data(K_FOLD_PATH + MELSPEC, outer, inner)
+                val_data, val_labels, val_names = extract_dev_data(K_FOLD_PATH + MELSPEC, outer, inner)
                 val_data = np.array([np.mean(x, axis=0) for x in val_data])
                 val_labels = val_labels.astype("int")
 

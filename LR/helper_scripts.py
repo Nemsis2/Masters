@@ -188,6 +188,10 @@ get the EER decision threshold for the corresponding validation set
 def get_EER_threshold(y, results):
       fpr, tpr, threshold = roc_curve(y, results, pos_label=1)
       fnr = 1 - tpr
-      optimal_threshold = threshold[np.nanargmin(np.absolute((fnr - fpr)))]
+      index = np.nanargmin(np.absolute((fnr - fpr)))
+      if index == 0:
+            optimal_threshold = 1
+      else:
+            optimal_threshold = threshold[index]
       
       return optimal_threshold
