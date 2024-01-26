@@ -53,13 +53,17 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
                     if model_type == 'dev':
                         data, labels = extract_inner_fold_data(k_fold_path, inner)
                     elif model_type =='em':
-                        data, labels = extract_outer_fold_data(k_fold_path)
+                        data, labels = extract_inner_fold_data(k_fold_path,inner)
 
-                    print(data[0].shape)
-                   
                     # for by frame
                     #labels = labels_per_frame(data, labels)
                     #data = np.vstack(data)
+
+                    if feature_type=="mfcc":
+                        for i in range(data.shape[0]):
+                            for j in range(data[i].shape[0]):
+                                if np.all(data[i][j]) != 0:
+                                    data[i][j] = normalize(data[i][j])
 
                     # for averaging
                     data = np.array([np.mean(x, axis=0) for x in data])

@@ -9,6 +9,14 @@ from sklearn.metrics import roc_auc_score
 from data_grab import extract_dev_data
 from helper_scripts import get_EER_threshold
 
+
+
+def normalize(mfcc):
+    mfcc = (mfcc-np.max(mfcc))/(np.max(mfcc)-np.min(mfcc))
+    return mfcc
+
+
+
 def grid_search_lr(X, y):
     """
     Description:
@@ -28,7 +36,7 @@ def grid_search_lr(X, y):
     """
     
     param_grid = {
-        'C':[ 1, 10],
+        'C':[0.01, 0.1, 1, 10],
         'l1_ratio':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     }
     model = LogisticRegression(C = 0.2782559402207126, 
@@ -98,6 +106,14 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
             # grab the dev data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
             data, labels, names = extract_dev_data(k_fold_path, inner)
+            
+            if feature_type=="mfcc":
+                for i in range(data.shape[0]):
+                    for j in range(data[i].shape[0]):
+                        if np.all(data[i][j]) != 0:
+                            data[i][j] = normalize(data[i][j])
+                
+            
             X = np.array([np.mean(x, axis=0) for x in data])
             labels = labels.astype("int")
 

@@ -74,9 +74,13 @@ def test_lr(feature_type, n_feature, threshold, model_type='em'):
         # for by frame
         #results, labels = gather_results(results, labels, names)
 
+        if feature_type=="mfcc":
+            for i in range(data.shape[0]):
+                for j in range(data[i].shape[0]):
+                    if np.all(data[i][j]) != 0:
+                        data[i][j] = normalize(data[i][j])
+
         results = sum(output)/4
-        if feature_type == 'mfcc':
-            print(results)
         inner_auc = roc_auc_score(new_labels, results)
         results = (np.array(results)>threshold[outer]).astype(np.int8)
         inner_sens, inner_spec = calculate_sens_spec(new_labels, results)
