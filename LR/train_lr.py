@@ -60,10 +60,7 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
                     #data = np.vstack(data)
 
                     if feature_type=="mfcc":
-                        for i in range(data.shape[0]):
-                            for j in range(data[i].shape[0]):
-                                if np.all(data[i][j]) != 0:
-                                    data[i][j] = normalize(data[i][j])
+                        data = normalize_mfcc(data)
 
                     # for averaging
                     data = np.array([np.mean(x, axis=0) for x in data])

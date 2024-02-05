@@ -1,9 +1,6 @@
 # libraries
 import torch as th
-import torch.nn as nn
-import torch.optim as optim
 import os
-import pickle
 
 # custom scripts
 from helper_scripts import *
@@ -42,7 +39,7 @@ def create_inner_lstm(feature_type, n_feature, model_type='dev'):
     --------
 
     """
-    model_path = f'../../models/tb/bi_lstm/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
+    model_path = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
     
     if len(os.listdir(model_path)) == 0: # if the folder is empty
         print(f'Creating {model_type} models for {n_feature}_{feature_type}')
@@ -53,7 +50,13 @@ def create_inner_lstm(feature_type, n_feature, model_type='dev'):
                 for inner in range(NUM_INNER_FOLDS):
                     print("Inner fold=", inner)
 
-                    model = bi_lstm_package(n_feature, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, inner, EPOCHS, BATCH_SIZE, model_type, n_feature, feature_type)
+                    if feature_type == 'melspec' or feature_type == 'lfb':
+                        model = bi_lstm_package(n_feature, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, inner, EPOCHS, BATCH_SIZE, model_type, n_feature, feature_type)
+                    elif feature_type == 'mfcc':
+                        model = bi_lstm_package(n_feature*3, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, inner, EPOCHS, BATCH_SIZE, model_type, n_feature, feature_type)
+                    
+                    model.train()
+                    model.save()
     
     else:
         print(f'Models already exist for type:{model_type}_{n_feature}_{feature_type}. Skipping...')
@@ -72,3 +75,6 @@ def main():
             
             # create models for ensemble testing
             create_inner_lstm(feature_type, n_feature,'em')
+    
+if __name__ == "__main__":
+    main()

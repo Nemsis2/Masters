@@ -1,14 +1,12 @@
 # libraries
-import torch as th
 import os
-import pickle
-from sklearn.metrics import roc_auc_score
+
 
 # custom scripts
 from helper_scripts import *
 from data_grab import *
 from data_preprocessing import * 
-from model_scripts import *
+from lstm_model_scripts import *
 
 """
 date: 23/10/2023 

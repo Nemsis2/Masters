@@ -195,3 +195,51 @@ def get_EER_threshold(y, results):
             optimal_threshold = threshold[index]
       
       return optimal_threshold
+
+
+
+def get_oracle_thresholds(results, labels, threshold):
+      sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
+      for i in range(len(threshold)):
+            thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
+            sens, spec = calculate_sens_spec(labels, thresholded_results)
+            sens_threshold[i] = np.abs(sens-0.9)
+            spec_threshold[i] = np.abs(spec-0.7)
+
+      sens = np.nanargmin(sens_threshold)
+      spec = np.nanargmin(spec_threshold)
+
+      return threshold[sens], threshold[spec]
+
+
+def normalize_mfcc(data):
+      for i in range(data.shape[0]):
+            for j in range(data[i].shape[0]):
+                  if np.all(data[i][j]) != 0:
+                        data[i][j] = (data[i][j]-np.max(data[i][j]))/(np.max(data[i][j])-np.min(data[i][j]))
+
+      return data
+
+
+def gather_results(results, labels, names):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+        results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
+    
+        labels: list or array which contains a label for each value in the data
+
+        names: list or array of patient_id associated with each value in the data
+
+    Outputs:
+    --------
+        out[:,1]: averaged model prob predictions for each unique patient_id in names
+
+        out[:,2]: label associated with each value in out[:,1]
+    """
+    unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+    out = np.column_stack((unq,np.bincount(ids,results)/count, np.bincount(ids,labels)/count))
+    return out[:,1], out[:,2]

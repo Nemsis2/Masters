@@ -18,10 +18,6 @@ device = "cuda" if th.cuda.is_available() else "cpu"
 MELSPEC = "180_melspec_fold_"
 MODEL_MELSPEC = "melspec_180"
 
-def normalize(mfcc):
-    mfcc = (mfcc-np.max(mfcc))/(np.max(mfcc)-np.min(mfcc))
-    return mfcc
-
 
 """
 Create a bi_lstm model
@@ -68,190 +64,189 @@ Optimizer(RMSprop)
 Model name
 """
 class bi_lstm_package():
-    def __init__(self, input_size, hidden_dim, layers, outer, inner, epochs, batch_size, model_type, n_feature, feature_type):
-        self.seed = th.seed()
-        self.epochs = epochs
-        self.batch_size = batch_size
-        self.model_type = model_type
-        self.outer = outer
-        self.inner = inner
-        self.n_feature = n_feature
-        self.feature_type = feature_type
-        self.k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+      def __init__(self, input_size, hidden_dim, layers, outer, inner, epochs, batch_size, model_type, n_feature, feature_type):
+            self.seed = th.seed()
+            self.epochs = epochs
+            self.batch_size = batch_size
+            self.model_type = model_type
+            self.outer = outer
+            self.inner = inner
+            self.n_feature = n_feature
+            self.feature_type = feature_type
+            self.k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+            self.test_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl'
+            
+            self.model = bi_lstm(input_size, hidden_dim, layers)
+            self.criterion = nn.CrossEntropyLoss()
+            self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4, weight_decay=1e-4)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=180, steps_per_epoch=30)
+
+      def train(self):
         
-        self.model = bi_lstm(input_size, hidden_dim, layers)
-        self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=1e-4, weight_decay=1e-4)
-        self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=180, steps_per_epoch=30)
+            if self.model_type == 'dev':
+                  data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
+            elif self.model_type =='em':
+                  data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
 
-    def train(self):
-        
-      if self.model_type == 'dev':
-            data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
-      elif self.model_type =='em':
-            data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
 
-      if self.feature_type=="mfcc":
-            for i in range(data.shape[0]):
-                  for j in range(data[i].shape[0]):
-                        if np.all(data[i][j]) != 0:
-                              data[i][j] = normalize(data[i][j])
+            data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
 
-      data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
-      
-      # run through all the epochs
-      for epoch in range(self.epochs):
-            print("epoch=", epoch)
-            train(data, labels, lengths, self)
+            # run through all the epochs
+            for epoch in range(self.epochs):
+                  print("epoch=", epoch)
+                  train(data, labels, lengths, self)
 
-      # collect the garbage
-      del data, labels, lengths
-      gc.collect()
+            # collect the garbage
+            del data, labels, lengths
+            gc.collect()
 
 #Currently broken
-    def train_on_select(self, num_features):
-        if self.inner == None:
-                data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
-                features = dataset_fss(num_features)
-        else:
-                data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
-                features = dataset_fss(num_features)
+      def train_on_select(self, num_features):
+            if self.inner == None:
+                  data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
+                  features = dataset_fss(num_features)
+            else:
+                  data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
+                  features = dataset_fss(num_features)
 
-        data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
+            data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
 
-        for batch in range(len(data)):
-            chosen_features = []
-            for feature in features:
-                chosen_features.append(np.asarray(data[batch][:,:,feature]))
-            data[batch] = th.as_tensor(np.stack(chosen_features, -1))
-        
-        # run through all the epochs
-        for epoch in range(self.epochs):
-            print("epoch=", epoch)
-            train(data, labels, lengths, self)
+            for batch in range(len(data)):
+                  chosen_features = []
+                  for feature in features:
+                        chosen_features.append(np.asarray(data[batch][:,:,feature]))
+                  data[batch] = th.as_tensor(np.stack(chosen_features, -1))
+            
+            # run through all the epochs
+            for epoch in range(self.epochs):
+                  print("epoch=", epoch)
+                  train(data, labels, lengths, self)
 
-        # collect the garbage
-        del data, labels, lengths
-        gc.collect()
+            # collect the garbage
+            del data, labels, lengths
+            gc.collect()
 
-    def save(self):
-      model_path = f'../../models/tb/bi_lstm/{self.feature_type}/{self.n_feature}_{self.feature_type}/{self.model_type}'
-      if self.model_type == 'val' or self.model_type == 'em':
-            pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}_inner_fold_{self.inner}', 'wb')) # save the model
-      if self.model_type == 'sm':
-            pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}', 'wb')) # save the model
+      def save(self):
+            model_path = f'../../models/tb/lstm/{self.feature_type}/{self.n_feature}_{self.feature_type}/{self.model_type}'
+            if self.model_type == 'dev' or self.model_type == 'em':
+                  pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}_inner_fold_{self.inner}', 'wb')) # save the model
+            if self.model_type == 'sm':
+                  pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}', 'wb')) # save the model
         
 #Currently broken
-    def val_on_select(self, num_features):
-        data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
+      def val_on_select(self, num_features):
+            data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
 
-        # preprocess data and get batches
-        data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
-        features = inner_fss(self.inner, self.outer, num_features)
+            # preprocess data and get batches
+            data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+            features = inner_fss(self.inner, self.outer, num_features)
 
-        for batch in range(len(data)):
-            chosen_features = []
-            for feature in features:
-                chosen_features.append(np.asarray(data[batch][:,:,feature]))
-            data[batch] = th.as_tensor(np.stack(chosen_features, -1))
+            for batch in range(len(data)):
+                  chosen_features = []
+                  for feature in features:
+                        chosen_features.append(np.asarray(data[batch][:,:,feature]))
+                  data[batch] = th.as_tensor(np.stack(chosen_features, -1))
 
-        results = []
-        for i in range(len(data)):
-            with th.no_grad():
-                results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
+            results = []
+            for i in range(len(data)):
+                  with th.no_grad():
+                        results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
 
-        results = np.vstack(results)
-        labels = np.vstack(labels)
+            results = np.vstack(results)
+            labels = np.vstack(labels)
 
-        unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-        results = out[:,1]
-        labels = out[:,2]
+            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+            results = out[:,1]
+            labels = out[:,2]
 
-        fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
-        threshold = threshold[np.nanargmin(np.absolute(([1 - tpr] - fpr)))]
+            fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
+            threshold = threshold[np.nanargmin(np.absolute(([1 - tpr] - fpr)))]
 
-        return results, labels, threshold
+            return results, labels, threshold
 
-    def val(self):
-        data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
+      def val(self):
+            data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
 
-        # preprocess data and get batches
-        data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
 
-        results = []
-        for i in range(len(data)):
-            with th.no_grad():
-                results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
+            # preprocess data and get batches
+            data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
 
-        results = np.vstack(results)
-        labels = np.vstack(labels)
+            results = []
+            for i in range(len(data)):
+                  with th.no_grad():
+                        results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
 
-        unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-        results = out[:,1]
-        labels = out[:,2]
+            results = np.vstack(results)
+            labels = np.vstack(labels)
 
-        #fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
-        #threshold = threshold[np.nanargmin(np.absolute(([1 - tpr] - fpr)))]
-        
-        fpr, tpr, thresholds = roc_curve(labels, results, pos_label=1)
-        sens_threshold, spec_threshold = get_oracle_thresholds(results, labels, thresholds)
-        threshold = sens_threshold
+            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+            results = out[:,1]
+            labels = out[:,2]
 
-        return results, labels, threshold
-    
-    def test(self):
-        # read in the test set
-        test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", self.outer)
+            threshold  = get_EER_threshold(labels, results)
 
-        # preprocess data and get batches
-        test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, "linear", self.batch_size)
+            return threshold
 
-        results = []
-        for i in range(len(test_data)):
-            with th.no_grad():
-                results.append(to_softmax((self.model((test_data[i]).to(device), lengths[i])).cpu()))
+      def test(self):
+            # read in the test set
+            data, labels, names = extract_test_data(self.test_path)
 
-        results = np.vstack(results)
-        test_labels = np.vstack(test_labels)
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
 
-        unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
-        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
-        results = out[:,1]
-        test_labels = out[:,2]
-        
-        return results, test_labels
-    
+            # preprocess data and get batches
+            data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+
+            results = []
+            for i in range(len(data)):
+                  with th.no_grad():
+                        results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
+
+            results = np.vstack(results)
+            labels = np.vstack(labels)
+
+            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+            results = out[:,1]
+            labels = out[:,2]
+
+            return results, labels, names
+
 #Currently broken
-    def test_on_select(self, num_features):
-        # read in the test set
-        test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", self.outer)
+      def test_on_select(self, num_features):
+            # read in the test set
+            test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", self.outer)
 
-        # preprocess data and get batches
-        test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, "linear", self.batch_size)
-        features = dataset_fss(num_features)
-        
-        for batch in range(len(test_data)):
-            chosen_features = []
-            for feature in features:
-                chosen_features.append(np.asarray(test_data[batch][:,:,feature]))
-            test_data[batch] = th.tensor(np.stack(chosen_features, -1))
+            # preprocess data and get batches
+            test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, "linear", self.batch_size)
+            features = dataset_fss(num_features)
+            
+            for batch in range(len(test_data)):
+                  chosen_features = []
+                  for feature in features:
+                        chosen_features.append(np.asarray(test_data[batch][:,:,feature]))
+                  test_data[batch] = th.tensor(np.stack(chosen_features, -1))
 
-        results = []
-        for i in range(len(test_data)):
-            with th.no_grad():
-                results.append(to_softmax((self.model((test_data[i]).to(device), lengths[i])).cpu()))
+            results = []
+            for i in range(len(test_data)):
+                  with th.no_grad():
+                        results.append(to_softmax((self.model((test_data[i]).to(device), lengths[i])).cpu()))
 
-        results = np.vstack(results)
-        test_labels = np.vstack(test_labels)
+            results = np.vstack(results)
+            test_labels = np.vstack(test_labels)
 
-        unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
-        out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
-        results = out[:,1]
-        test_labels = out[:,2]
-        
-        return results, test_labels
+            unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
+            results = out[:,1]
+            test_labels = out[:,2]
+            
+            return results, test_labels
 
 
 

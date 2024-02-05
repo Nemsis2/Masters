@@ -51,6 +51,9 @@ def test_lr(feature_type, n_feature, threshold, model_type='em'):
         # grab the testing data
         k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
         data, labels, names = extract_test_data(k_fold_path)
+
+        if feature_type=="mfcc":
+            data = normalize_mfcc(data)
         
         # for by frame
         #labels = labels_per_frame(data, labels)
@@ -73,12 +76,6 @@ def test_lr(feature_type, n_feature, threshold, model_type='em'):
         # total the predictions over all models in the outer fold
         # for by frame
         #results, labels = gather_results(results, labels, names)
-
-        if feature_type=="mfcc":
-            for i in range(data.shape[0]):
-                for j in range(data[i].shape[0]):
-                    if np.all(data[i][j]) != 0:
-                        data[i][j] = normalize(data[i][j])
 
         results = sum(output)/4
         inner_auc = roc_auc_score(new_labels, results)
