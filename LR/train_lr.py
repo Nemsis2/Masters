@@ -32,7 +32,12 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
     
     Inputs:
     ---------
+    feature_type: 
 
+    n_feature:
+
+    model_type: 
+    
     Outputs:
     --------
 
@@ -49,11 +54,7 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
                     print("Inner fold=", inner)
 
                     k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-                    print(k_fold_path)
-                    if model_type == 'dev':
-                        data, labels = extract_inner_fold_data(k_fold_path, inner)
-                    elif model_type =='em':
-                        data, labels = extract_inner_fold_data(k_fold_path,inner)
+                    data, labels = extract_inner_fold_data(k_fold_path, inner)
 
                     # for by frame
                     #labels = labels_per_frame(data, labels)
@@ -81,11 +82,8 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            #create models for development (threshold calculation)
             create_inner_lr(feature_type, n_feature,'dev')
             
-            # create models for ensemble testing
-            create_inner_lr(feature_type, n_feature,'em')
 
 
 if __name__ == "__main__":

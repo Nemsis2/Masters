@@ -16,8 +16,13 @@ NUM_INNER_FOLDS = 4
 # set hyperpaperameters
 BATCH_SIZE = 64
 EPOCHS = 16
-HIDDEN_DIM = [128, 64, 32]
-LSTM_LAYERS = [3, 2, 2]
+#geoff
+HIDDEN_DIM = [32, 64, 32]
+LSTM_LAYERS = [2, 1, 1]
+
+#own
+#HIDDEN_DIM = [128, 64, 32]
+#LSTM_LAYERS = [3, 2, 2]
 
 # Find gpu. If it cannot be found exit immediately
 device = "cuda" if th.cuda.is_available() else "cpu"
@@ -72,9 +77,6 @@ def main():
         for n_feature in features:
             #create models for development (threshold calculation)
             create_inner_lstm(feature_type, n_feature,'dev')
-            
-            # create models for ensemble testing
-            create_inner_lstm(feature_type, n_feature,'em')
     
 if __name__ == "__main__":
     main()

@@ -3,18 +3,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 import numpy as np
 import pickle
-from sklearn.metrics import roc_auc_score
 
 # custom scripts
 from data_grab import extract_dev_data
-from helper_scripts import get_EER_threshold
-
-
-
-def normalize(mfcc):
-    mfcc = (mfcc-np.max(mfcc))/(np.max(mfcc)-np.min(mfcc))
-    return mfcc
-
+from helper_scripts import get_EER_threshold, normalize_mfcc
 
 
 def grid_search_lr(X, y):
@@ -107,13 +99,7 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
             data, labels, names = extract_dev_data(k_fold_path, inner)
             
-            if feature_type=="mfcc":
-                for i in range(data.shape[0]):
-                    for j in range(data[i].shape[0]):
-                        if np.all(data[i][j]) != 0:
-                            data[i][j] = normalize(data[i][j])
-                
-            
+            data = normalize_mfcc(data)
             X = np.array([np.mean(x, axis=0) for x in data])
             labels = labels.astype("int")
 

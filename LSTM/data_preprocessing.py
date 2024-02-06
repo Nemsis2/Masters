@@ -113,7 +113,7 @@ def create_test_batches(data, labels, names, interpolation, batch_size):
             batched_lengths.append(data_lengths[i*batch_size:])
 
     for i in range(len(batched_data)):
-        batched_data[i] = th.as_tensor(np.vstack(batched_data[i]))
+        batched_data[i] = th.as_tensor(np.vstack(batched_data[i])).float()
         batched_labels[i] = th.as_tensor(np.vstack(to_categorical(batched_labels[i],2)))
 
     return batched_data, batched_labels, names, batched_lengths

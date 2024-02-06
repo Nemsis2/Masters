@@ -82,11 +82,7 @@ class bi_lstm_package():
             self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=180, steps_per_epoch=30)
 
       def train(self):
-        
-            if self.model_type == 'dev':
-                  data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
-            elif self.model_type =='em':
-                  data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
+            data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
 
             if self.feature_type=="mfcc":
                   data = normalize_mfcc(data)
@@ -167,7 +163,7 @@ class bi_lstm_package():
 
             return results, labels, threshold
 
-      def val(self):
+      def dev(self, return_threshold=False, return_auc=False):
             data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
 
             if self.feature_type=="mfcc":
@@ -184,14 +180,16 @@ class bi_lstm_package():
             results = np.vstack(results)
             labels = np.vstack(labels)
 
-            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-            results = out[:,1]
-            labels = out[:,2]
-
+            results, labels = gather_results(results, labels, names)
+            auc = roc_auc_score(labels, results)
             threshold  = get_EER_threshold(labels, results)
-
-            return threshold
+            
+            if return_threshold == True and return_auc == False:
+                  return threshold
+            elif return_auc == True and return_threshold == False:
+                  return auc
+            else:
+                  return threshold, auc
 
       def test(self):
             # read in the test set
@@ -210,11 +208,6 @@ class bi_lstm_package():
 
             results = np.vstack(results)
             labels = np.vstack(labels)
-
-            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-            results = out[:,1]
-            labels = out[:,2]
 
             return results, labels, names
 

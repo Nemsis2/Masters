@@ -2,65 +2,14 @@ import torch as th
 import torch.nn as nn
 import numpy as np
 import logging
-import os
 import pickle
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import roc_curve
 
 
 #https://discuss.pytorch.org/t/is-there-something-like-keras-utils-to-categorical-in-pytorch/5960
 def to_categorical(y, num_classes):
       """ 1-hot encodes a tensor """
       return np.eye(num_classes, dtype='float')[np.array(y).astype(int)]
-
-
-#https://stackoverflow.com/questions/54846905/pytorch-get-all-layers-of-model
-def nested_children(m: th.nn.Module):
-    children = dict(m.named_children())
-    output = {}
-    if children == {}:
-        # if module has no children; m is last child! :O
-        return m
-    else:
-        # look for children from children... to the last child!
-        for name, child in children.items():
-            try:
-                output[name] = nested_children(child)
-            except TypeError:
-                output[name] = nested_children(child)
-    return output
-
-
-#https://stackoverflow.com/questions/52679734/how-to-create-new-folder-each-time-i-run-script
-def create_new_folder(folder_path):
-      folder_names = os.listdir(folder_path)
-      if len(os.listdir(folder_path)) != 0:
-            last_number = max([int(name) for name in folder_names if name.isnumeric()])
-            new_name = str(last_number + 1).zfill(4)
-      else:
-            new_name = str("0001")
-      
-      os.mkdir((folder_path+new_name))
-
-      return new_name
-
-
-"""
-sort the patient ids such that each is unqiue
-"""
-def sort_patient_id(patients):
-      # create a new list for patients. this code is horrific but kinda works
-      patients_return = []
-      current_patient = 0
-      new_patient_id = 0
-      for i in range(patients.shape[0]):
-            if current_patient == patients[i]:
-                  patients_return.append(new_patient_id)
-            else:
-                  current_patient = patients[i]
-                  new_patient_id += 1
-                  patients_return.append(new_patient_id)
-
-      return patients_return
 
 
 """
@@ -76,50 +25,6 @@ def total_predictions(results):
             final_results[i] = final_results[i]/len(results)
 
       return final_results
-
-
-"""
-Turn the results and test labels to binary
-"""
-def binarise_results(results, test_labels):
-      y = []
-      binary_results = []
-      for i in range(len(results)):
-            for j in range(len(results[i])):
-                  y.append(test_labels[i][j][0])
-                  binary_results.append(float(np.array(results[i][j][0])))
-
-      return y, binary_results
-
-
-"""
-make predictions per patient
-"""
-def make_patient_predictions(y, results, patients, optimal_threshold):
-      patient_predictions, patient_true_predictions  = [], []
-      c, current_prediction, current_true_prediction, current_patient = 0, 0, 0, 0
-
-      for i in range(len(patients)):
-            if current_patient == patients[i]:
-                  c += 1
-                  current_prediction += results[i]
-                  current_true_prediction += y[i]
-            else:
-                  patient_predictions.append(current_prediction/c)
-                  patient_true_predictions.append(current_true_prediction/c)
-                  current_patient += 1
-                  c = 1
-                  current_prediction = results[i]
-                  current_true_prediction = y[i]
-
-      for i in range(len(patient_predictions)):
-            if patient_predictions[i] > optimal_threshold:
-                  patient_predictions[i] = 1
-            else:
-                  patient_predictions[i] = 0
-
-      return patient_predictions, patient_true_predictions
-
 
 
 def calculate_sens_spec(patient_true_predictions, patient_predictions):
@@ -170,17 +75,6 @@ def log_test_info(test_fold, auc, sens, spec):
     logging.info(logging_info)
 
 
-"""
-compare labels with predicted labels and get the AUC as well as true_p, flase_p, true_n and false_n per patient
-"""
-def patient_performance_assess(y, results, patients, optimal_threshold):
-      patients = sort_patient_id(patients)
-      patient_predictions, patient_true_predictions = make_patient_predictions(y, results, patients, optimal_threshold)
-      auc = roc_auc_score(patient_true_predictions, patient_predictions)
-      sens, spec = calculate_sens_spec(patient_true_predictions, patient_predictions)
-
-      return auc, sens, spec
-
 
 """
 get the EER decision threshold for the corresponding validation set
@@ -222,24 +116,30 @@ def normalize_mfcc(data):
 
 
 def gather_results(results, labels, names):
-    """
-    Description:
-    ---------
+      """
+      Description:
+      ---------
 
-    Inputs:
-    ---------
-        results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
-    
-        labels: list or array which contains a label for each value in the data
+      Inputs:
+      ---------
+            results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
 
-        names: list or array of patient_id associated with each value in the data
+            labels: list or array which contains a label for each value in the data
 
-    Outputs:
-    --------
-        out[:,1]: averaged model prob predictions for each unique patient_id in names
+            names: list or array of patient_id associated with each value in the data
 
-        out[:,2]: label associated with each value in out[:,1]
-    """
-    unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-    out = np.column_stack((unq,np.bincount(ids,results)/count, np.bincount(ids,labels)/count))
-    return out[:,1], out[:,2]
+      Outputs:
+      --------
+            out[:,1]: averaged model prob predictions for each unique patient_id in names
+
+            out[:,2]: label associated with each value in out[:,1]
+      """
+
+      unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+      out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+      return out[:,1], out[:,2]
+
+def load_model(model_path):
+      model = pickle.load(open(model_path, 'rb')) # load in the model
+      th.manual_seed(model.seed) # set the seed to be the same as the one the model was generated on
+      return model

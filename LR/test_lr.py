@@ -25,13 +25,18 @@ if device != "cuda":
 
 
 
-def test_lr(feature_type, n_feature, threshold, model_type='em'):
+def test_lr(feature_type, n_feature, threshold):
     """
     Description:
     ---------
 
     Inputs:
     ---------
+    feature_type: 
+
+    n_feature:
+
+    model_type: 
 
     Outputs:
     --------
@@ -44,7 +49,7 @@ def test_lr(feature_type, n_feature, threshold, model_type='em'):
 
         for inner in range(NUM_INNER_FOLDS):
             # get the testing models
-            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
             models.append(pickle.load(open(model_path, 'rb'))) # load in the model
         
 
@@ -102,7 +107,7 @@ def main():
             threshold = get_decision_threshold(feature_type, n_feature, NUM_OUTER_FOLDS, NUM_INNER_FOLDS)
 
             # test the em setup
-            auc, sens, spec = test_lr(feature_type, n_feature, threshold, 'em')
+            auc, sens, spec = test_lr(feature_type, n_feature, threshold)
 
             print(f'AUC for {n_feature}_{feature_type}: {auc}')
             print(f'Sens for {n_feature}_{feature_type}: {sens}')
