@@ -114,6 +114,24 @@ def normalize_mfcc(data):
 
       return data
 
+"""
+sort the patient ids such that each is unqiue
+"""
+def sort_patient_id(patients):
+      # create a new list for patients. this code is horrific but kinda works
+      patients_return = []
+      current_patient = 0
+      new_patient_id = 0
+      for i in range(patients.shape[0]):
+            if current_patient == patients[i]:
+                  patients_return.append(new_patient_id)
+            else:
+                  current_patient = patients[i]
+                  new_patient_id += 1
+                  patients_return.append(new_patient_id)
+
+      return patients_return
+
 
 def gather_results(results, labels, names):
       """

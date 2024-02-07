@@ -98,6 +98,25 @@ class bi_lstm_package():
             del data, labels, lengths
             gc.collect()
 
+      
+      def train_ts(self, models):
+            data, labels = extract_outer_fold_data(self.k_fold_path)
+
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
+
+            data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
+
+            # run through all the epochs
+            for epoch in range(self.epochs):
+                  print("epoch=", epoch)
+                  train_ts(data, labels, self, models, lengths)
+
+            # collect the garbage
+            del data, labels, lengths
+            gc.collect()
+
+
 #Currently broken
       def train_on_select(self, num_features):
             if self.inner == None:
@@ -126,9 +145,9 @@ class bi_lstm_package():
 
       def save(self):
             model_path = f'../../models/tb/lstm/{self.feature_type}/{self.n_feature}_{self.feature_type}/{self.model_type}'
-            if self.model_type == 'dev' or self.model_type == 'em':
+            if self.model_type == 'dev':
                   pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}_inner_fold_{self.inner}', 'wb')) # save the model
-            if self.model_type == 'sm':
+            if self.model_type == 'ts':
                   pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}', 'wb')) # save the model
         
 #Currently broken
@@ -337,6 +356,41 @@ def ensemble_train(x, y, model, inner_models, criterion_kl, lengths):
             
             model.optimizer.step() # update the model weights
             model.scheduler.step() # update the scheduler
+
+
+"""
+complete a training step for a batch of data
+"""
+def train_ts(x, y, model, inner_models, lengths):
+      model.model = model.model.to(device)
+      for i in range(len(inner_models)):
+            inner_models[i].model = inner_models[i].model.to(device)
+      
+      
+      for i in range(len(x)):
+            # prep the data
+            x_batch = th.as_tensor(x[i]).to(device) # grab data of size batch and move to the gpu
+
+            # update the student model using the student predictions and the teachers predictions            
+            inner_results = []
+            for inner_model in inner_models:
+                  th.manual_seed(inner_model.seed)
+                  inner_results.append(get_predictions(x_batch, inner_model.model, lengths[i])) # do a forward pass through the models
+
+            # total the predictions over all models
+            inner_results = sum(inner_results)/len(inner_results)
+            inner_results = th.as_tensor(inner_results.to(device))
+            
+            model.optimizer.zero_grad() # set the optimizer grad to zero
+            
+            # update the student model using the student predictions and the teacher predictions (ce loss)
+            results = model.model(x_batch, lengths[i]) # get the model to make predictions
+            ce_loss = model.criterion(results, inner_results) # calculate the loss
+            ce_loss.backward(retain_graph=True) # use back prop
+            
+            model.optimizer.step() # update the model weights
+            model.scheduler.step() # update the scheduler
+
 
 
 """
