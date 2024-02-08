@@ -103,6 +103,42 @@ def create_ts_lstm(feature_type, n_feature):
         print(f'Models already exist for type:ts_{n_feature}_{feature_type}. Skipping...')
 
 
+def create_ts_lstm_2(feature_type, n_feature):
+    """
+    Description:
+    ---------
+    
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    model_path = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts_2/'
+    
+    if len(os.listdir(model_path)) == 0: # if the folder is empty
+        print(f'Creating ts_2 models for {n_feature}_{feature_type}')
+
+        for outer in range(NUM_OUTER_FOLDS):
+            print("Outer fold=", outer)
+            
+            if feature_type == 'melspec' or feature_type == 'lfb':
+                model = bi_lstm_package(n_feature, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, None, EPOCHS, BATCH_SIZE, 'ts_2', n_feature, feature_type)
+            elif feature_type == 'mfcc':
+                model = bi_lstm_package(n_feature*3, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, None, EPOCHS, BATCH_SIZE, 'ts_2', n_feature, feature_type)
+
+            models = []
+            for inner in range(NUM_INNER_FOLDS):
+                  models.append(load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'))
+
+            model.train_ts_2(models)
+            model.save()
+    
+    else:
+        print(f'Models already exist for type:ts_2_{n_feature}_{feature_type}. Skipping...')
+
+
 
 def main():
     for feature_type in ['mfcc', 'melspec', 'lfb']:
@@ -116,6 +152,8 @@ def main():
             create_dev_lstm(feature_type, n_feature)
 
             create_ts_lstm(feature_type, n_feature)
+
+            create_ts_lstm_2(feature_type, n_feature)
     
 if __name__ == "__main__":
     main()

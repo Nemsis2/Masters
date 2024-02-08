@@ -136,6 +136,43 @@ def test_ts_lstm(feature_type, n_feature):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
+def test_ts_lstm_2(feature_type, n_feature):
+    """
+    Description:
+    ---------
+    
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):  
+        # get the threshold from the dev set
+        threshold = 0
+        for inner in range(NUM_INNER_FOLDS):
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+            threshold += model.dev(return_threshold=True)
+        
+        # load in and test ts model
+        model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts_2/lstm_{feature_type}_{n_feature}_outer_fold_{outer}')
+        results, labels, names = model.test() # do a forward pass through the models
+        
+        # get auc
+        results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
+        auc += roc_auc_score(labels, results)
+
+        # use threshold and get sens and spec
+        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
+        sens_, spec_ = calculate_sens_spec(labels, results)
+        sens += sens_
+        spec += spec_
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
+
 
 
 def main():
@@ -163,6 +200,12 @@ def main():
             print(f'AUC for ts {n_feature}_{feature_type}: {auc}')
             print(f'Sens for ts {n_feature}_{feature_type}: {sens}')
             print(f'Spec for ts {n_feature}_{feature_type}: {spec}')
+
+            auc, sens, spec = test_ts_lstm_2(feature_type, n_feature)
+
+            print(f'AUC for ts_2 {n_feature}_{feature_type}: {auc}')
+            print(f'Sens for ts_2 {n_feature}_{feature_type}: {sens}')
+            print(f'Spec for ts_2 {n_feature}_{feature_type}: {spec}')
     
 if __name__ == "__main__":
     main()

@@ -216,3 +216,8 @@ def normalize_mfcc(data):
                         data[i][j] = (data[i][j]-np.max(data[i][j]))/(np.max(data[i][j])-np.min(data[i][j]))
 
       return data
+
+
+def load_model(model_path):
+      model = pickle.load(open(model_path, 'rb')) # load in the model
+      return model
