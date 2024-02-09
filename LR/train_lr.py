@@ -29,18 +29,16 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
     """
     Description:
     ---------
-    
+    Trains models for the outer and inner folds. Skips a folder if it contains anything.
+
     Inputs:
     ---------
-    feature_type: 
+    feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
 
-    n_feature:
+    n_feature: (int) number of features.
 
-    model_type: 
+    model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
     
-    Outputs:
-    --------
-
     """
     model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
     

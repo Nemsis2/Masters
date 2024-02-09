@@ -29,19 +29,25 @@ def test_lr(feature_type, n_feature, threshold):
     """
     Description:
     ---------
-
+    Calculates the auc, sens and spec for a LR model on the given features.
+    
     Inputs:
     ---------
-    feature_type: 
+    feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
 
-    n_feature:
+    n_feature: (int) number of features.
 
-    model_type: 
+    threshold: (float) decision threshold calculated on the development set.
 
     Outputs:
     --------
+    auc: average auc over all outer folds.
 
+    sens: avearge sensitivity over all outer folds.
+
+    spec: average specificity over all outer folds.
     """
+
     auc, sens, spec = 0, 0, 0
     for outer in range(NUM_OUTER_FOLDS):
         # grab all models to be tested for that outer fold
@@ -100,18 +106,11 @@ def test_lr_multi_feature():
     """
     Description:
     ---------
-
-    Inputs:
-    ---------
-    feature_type: 
-
-    n_feature:
-
-    model_type: 
-
+    Calculates the auc, sens and spec by averaging the decision making over all different feature types.
+    
     Outputs:
     --------
-
+    auc: average auc over all outer folds.
     """
 
     auc = 0

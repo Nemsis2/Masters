@@ -4,11 +4,25 @@ from helper_scripts import sort_patient_id
 K_FOLD_PATH = "../data/tb/combo/multi_folds/"
 
 
-
-"""
-get train data for a specific inner and outer fold
-"""
 def extract_inner_fold_data(path, inner_fold):
+    """
+    Description:
+    ---------
+    Extracts training data for the relevant inner fold given the path to the data.
+    
+    Inputs:
+    ---------
+    path: (string) path to the data from the working directory
+
+    inner_fold: (int) inner fold to be selected from the data
+
+    Outputs:
+    --------
+    batch_data: (np.array) array of all extracted data
+
+    batch_labels: (np.array) array of labels associated with each extracted data point
+    """
+
     batch = []
     # read in the data located at the path 
     data = pickle.load(open(path, 'rb'))
@@ -27,10 +41,22 @@ def extract_inner_fold_data(path, inner_fold):
     return batch_data, batch_labels
 
 
-"""
-get all data in an outer fold
-"""
 def extract_outer_fold_data(path):
+    """
+    Description:
+    ---------
+    Extracts training data for the relevant outer fold given the path to the data.
+    
+    Inputs:
+    ---------
+    path: (string) path to the data from the working directory
+
+    Outputs:
+    --------
+    batch_data: (np.array) array of all extracted data
+
+    batch_labels: (np.array) array of labels associated with each extracted data point
+    """
     batch = []
     # read in the data located at the path 
     data = pickle.load(open(path, 'rb'))
@@ -54,10 +80,26 @@ def extract_outer_fold_data(path):
     return batch_data, batch_labels
 
 
-"""
-get dev data for a specific inner and outer fold
-"""
 def extract_dev_data(path, inner_fold):
+    """
+    Description:
+    ---------
+    Extracts only the dev data for the relevant outer fold given the path to the data.
+    
+    Inputs:
+    ---------
+    path: (string) path to the data from the working directory
+
+    inner_fold: (int) inner fold to be selected from the data
+
+    Outputs:
+    --------
+    batch_data: (np.array) array of all extracted data
+
+    batch_labels: (np.array) array of labels associated with each extracted data point
+
+    batch_names: (np.array) array of ids associated with patients whose coughs are included within the extracte data
+    """
     batch = []
     # read in the data located at the path 
     data = pickle.load(open(path, 'rb'))
@@ -78,10 +120,25 @@ def extract_dev_data(path, inner_fold):
     return batch_data, batch_labels, batch_names
 
 
-"""
-get the test data
-"""
+
 def extract_test_data(path):
+    """
+    Description:
+    ---------
+    Extracts only the test data for the relevant outer fold given the path to the data.
+    
+    Inputs:
+    ---------
+    path: (string) path to the data from the working directory
+
+    Outputs:
+    --------
+    batch_data: (np.array) array of all extracted data
+
+    batch_labels: (np.array) array of labels associated with each extracted data point
+
+    batch_names: (np.array) array of ids associated with patients whose coughs are included within the extracte data
+    """
     batch = []
     # read in the data located at the path 
     data = pickle.load(open(path, 'rb'))
