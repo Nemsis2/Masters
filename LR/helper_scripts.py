@@ -209,15 +209,18 @@ def get_oracle_thresholds(results, labels, threshold):
 
     return threshold[sens], threshold[spec]
 
-def normalize_mfcc(data):
-      for i in range(data.shape[0]):
-            for j in range(data[i].shape[0]):
-                  if np.all(data[i][j]) != 0:
-                        data[i][j] = (data[i][j]-np.max(data[i][j]))/(np.max(data[i][j])-np.min(data[i][j]))
-
-      return data
-
-
 def load_model(model_path):
       model = pickle.load(open(model_path, 'rb')) # load in the model
       return model
+
+def select_features(train_data, dev_data, feature_priority, feature):
+      chosen_features, chosen_features_dev = [], []
+      for prev_select_feature in feature_priority:
+            chosen_features.append(np.asarray(train_data[:,int(prev_select_feature)]))
+            chosen_features_dev.append(np.asarray(dev_data[:,int(prev_select_feature)]))
+      chosen_features.append(np.asarray(train_data[:,feature]))
+      chosen_features_dev.append(np.asarray(dev_data[:,feature]))
+      chosen_features = th.as_tensor(np.stack(chosen_features, -1))
+      chosen_features_dev = th.as_tensor(np.stack(chosen_features_dev, -1))
+
+      return chosen_features, chosen_features_dev

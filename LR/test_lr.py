@@ -20,8 +20,8 @@ NUM_INNER_FOLDS = 4
 device = "cuda" if th.cuda.is_available() else "cpu"
 print("device=", device)
 if device != "cuda":
-      print("exiting since cuda not enabled")
-      exit(1)
+    print("exiting since cuda not enabled")
+    exit(1)
 
 
 
@@ -57,27 +57,14 @@ def test_lr(feature_type, n_feature, threshold):
             # get the testing models
             model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
             models.append(pickle.load(open(model_path, 'rb'))) # load in the model
-        
 
         # grab the testing data
         k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
-        data, labels, names = extract_test_data(k_fold_path)
-
-        if feature_type=="mfcc":
-            data = normalize_mfcc(data)
-        
-        # for by frame
-        #labels = labels_per_frame(data, labels)
-        #names = labels_per_frame(data, names) # misusing this function to keep num_names = num_labels
-        #X = np.vstack(data)
-        
-        # for averaging
-        X = np.array([np.mean(x, axis=0) for x in data])
-        labels = labels.astype("int")
+        data, labels, names = load_test_data(k_fold_path, feature_type)
 
         results = []
         for model in models:
-            results.append(model.predict_proba(X)) # do a forward pass through the models
+            results.append(model.predict_proba(data)) # do a forward pass through the models
 
         output = []
         for i in range(len(results)):
@@ -107,7 +94,7 @@ def test_lr_multi_feature():
     Description:
     ---------
     Calculates the auc, sens and spec by averaging the decision making over all different feature types.
-    
+
     Outputs:
     --------
     auc: average auc over all outer folds.
@@ -128,19 +115,13 @@ def test_lr_multi_feature():
                 # get the testing models
                 model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
                 models.append(pickle.load(open(model_path, 'rb'))) # load in the model
-            
 
             # grab the testing data
             k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
-            data, labels, names = extract_test_data(k_fold_path)
-            X = np.array([np.mean(x, axis=0) for x in data])
-            labels = labels.astype("int")
-        
-            if feature_type=="mfcc":
-                data = normalize_mfcc(data)
+            data, labels, names = load_test_data(k_fold_path, feature_type)
         
             for model in models:
-                results.append(model.predict_proba(X)) # do a forward pass through the models
+                results.append(model.predict_proba(data)) # do a forward pass through the models
 
         output = []
         for i in range(len(results)):
@@ -154,6 +135,53 @@ def test_lr_multi_feature():
         auc += inner_auc
 
     return auc/NUM_OUTER_FOLDS
+
+
+
+# untested
+# check feature summing selection method
+def test_lr_fss(feature_type, n_feature, threshold):
+    for outer in range(NUM_OUTER_FOLDS):
+        models = []
+        
+        for inner in range(NUM_INNER_FOLDS):
+            # get the testing models
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            models.append(pickle.load(open(model_path, 'rb'))) # load in the model
+
+        # grab the testing data
+        k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
+        data, labels, names = load_test_data(k_fold_path, feature_type)
+
+        # select only the relevant features
+        feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
+        selected_features = dataset_fss(n_feature, feature_path)
+        chosen_features = []
+        for i in range(n_feature):
+            chosen_features.append(np.asarray(data[:,selected_features[i]]))
+        chosen_features = th.as_tensor(np.stack(chosen_features, -1))
+
+        results = []
+        for model in models:
+            results.append(model.predict_proba(chosen_features)) # do a forward pass through the models
+
+        output = []
+        for i in range(len(results)):
+            new_results, new_labels = gather_results(results[i], labels, names)
+            output.append(new_results)
+
+        results = sum(output)/4
+        inner_auc = roc_auc_score(new_labels, results)
+        results = (np.array(results)>threshold[outer]).astype(np.int8)
+        inner_sens, inner_spec = calculate_sens_spec(new_labels, results)
+        
+        # add to the total auc, sens and spec
+        auc += inner_auc
+        sens += inner_sens
+        spec += inner_spec
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
 
 
 def main():
@@ -177,7 +205,6 @@ def main():
     auc = test_lr_multi_feature()
 
     print(f'AUC for multi feature: {auc}')
-
 
 if __name__ == "__main__":
     main()

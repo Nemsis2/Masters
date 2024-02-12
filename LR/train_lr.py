@@ -21,8 +21,8 @@ NUM_INNER_FOLDS = 4
 device = "cuda" if th.cuda.is_available() else "cpu"
 print("device=", device)
 if device != "cuda":
-      print("exiting since cuda not enabled")
-      exit(1)
+    print("exiting since cuda not enabled")
+    exit(1)
 
 
 def create_inner_lr(feature_type, n_feature, model_type='dev'):
@@ -46,30 +46,55 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
         print(f'Creating {model_type} models for {n_feature}_{feature_type}')
 
         for outer in range(NUM_OUTER_FOLDS):
-                print("Outer fold=", outer)
-                
-                for inner in range(NUM_INNER_FOLDS):
-                    print("Inner fold=", inner)
+            print("Outer fold=", outer)
+            
+            for inner in range(NUM_INNER_FOLDS):
+                print("Inner fold=", inner)
 
-                    k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-                    data, labels = extract_inner_fold_data(k_fold_path, inner)
+                k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+                data, labels = load_inner_data(k_fold_path, feature_type, inner)
 
-                    # for by frame
-                    #labels = labels_per_frame(data, labels)
-                    #data = np.vstack(data)
-
-                    if feature_type=="mfcc":
-                        data = normalize_mfcc(data)
-
-                    # for averaging
-                    data = np.array([np.mean(x, axis=0) for x in data])
-                    labels = labels.astype("int")
-
-                    model, params = grid_search_lr(data, labels)
-                    pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+                model, params = grid_search_lr(data, labels)
+                pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
     
     else:
         print(f'Models already exist for type:{model_type}_{n_feature}_{feature_type}. Skipping...')
+
+
+    def create_fss_lr(feature_type, n_feature):
+        """
+        Description:
+        ---------
+
+        Inputs:
+        ---------
+        feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
+
+        n_feature: (int) number of features.
+
+        model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
+        """
+        model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
+        
+        for outer in range(NUM_OUTER_FOLDS):
+            print("Outer fold=", outer)
+            
+            for inner in range(NUM_INNER_FOLDS):
+                print("Inner fold=", inner)
+
+                k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+                data, labels = load_inner_data(k_fold_path, feature_type, inner)
+
+                # select only the relevant features
+                feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
+                selected_features = dataset_fss(n_feature, feature_path)
+                chosen_features = []
+                for i in range(n_feature):
+                    chosen_features.append(np.asarray(data[:,selected_features[i]]))
+                chosen_features = th.as_tensor(np.stack(chosen_features, -1))
+
+                model, params = grid_search_lr(data, labels)
+                pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
 
 
 def main():

@@ -1,8 +1,15 @@
 import numpy as np
 import pickle
 from helper_scripts import sort_patient_id
-K_FOLD_PATH = "../data/tb/combo/multi_folds/"
 
+
+def normalize_mfcc(data):
+      for i in range(data.shape[0]):
+            for j in range(data[i].shape[0]):
+                  if np.all(data[i][j]) != 0:
+                        data[i][j] = (data[i][j]-np.max(data[i][j]))/(np.max(data[i][j])-np.min(data[i][j]))
+
+      return data
 
 def extract_inner_fold_data(path, inner_fold):
     """
@@ -156,3 +163,42 @@ def extract_test_data(path):
     batch_names = np.array(sort_patient_id(batch_names))
 
     return batch_data, batch_labels, batch_names
+
+
+
+def load_inner_data(k_fold_path, feature_type, inner):
+      data, labels = extract_inner_fold_data(k_fold_path, inner)
+
+      if feature_type=="mfcc":
+            data = normalize_mfcc(data)
+
+      data = np.array([np.mean(x, axis=0) for x in data])
+
+      #labels = labels_per_frame(data, labels)
+      #data = np.vstack(data)
+
+      return data, labels.astype("int")
+
+
+def load_dev_data(k_fold_path, feature_type, inner):
+      data, labels, names = extract_dev_data(k_fold_path, inner)
+
+      if feature_type=="mfcc":
+            data = normalize_mfcc(data)
+
+      data = np.array([np.mean(x, axis=0) for x in data])
+
+      return data, labels.astype("int"), names
+
+def load_test_data(k_fold_path, feature_type):
+      data, labels, names = extract_test_data(k_fold_path)
+      #labels = labels_per_frame(data, labels)
+      #names = labels_per_frame(data, names) # misusing this function to keep num_names = num_labels
+      #X = np.vstack(data)
+
+      if feature_type=="mfcc":
+            data = normalize_mfcc(data)
+
+      data = np.array([np.mean(x, axis=0) for x in data])
+
+      return data, labels.astype("int"), names

@@ -5,8 +5,8 @@ import numpy as np
 import pickle
 
 # custom scripts
-from data_grab import extract_dev_data
-from helper_scripts import get_EER_threshold, normalize_mfcc
+from data_grab import extract_dev_data, normalize_mfcc
+from helper_scripts import get_EER_threshold
 
 
 def grid_search_lr(X, y):
@@ -20,27 +20,28 @@ def grid_search_lr(X, y):
     
         y: list or array which contains a label for each value in the data np.array
 
+        feature_type: 
+
     Outputs:
     --------
         best_clf: lr model with the best performing architecture as found by GridSearchCV
 
         best_clf.params: Optimal hyperparameters determined by the GridSearch
     """
-    
     param_grid = {
         'C':[0.01, 0.1, 1, 10],
         'l1_ratio':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     }
     model = LogisticRegression(C = 0.2782559402207126, 
-    l1_ratio = 1, max_iter=1000000, 
-    solver='saga', 
-    penalty='elasticnet', 
-    multi_class = 'multinomial', 
-    n_jobs = -1,
-    tol=0.0001)
+                                l1_ratio = 1, max_iter=1000000, 
+                                solver='saga', 
+                                penalty='elasticnet', 
+                                multi_class = 'multinomial', 
+                                n_jobs = -1,
+                                tol=0.0001)
     clf = GridSearchCV(model, param_grid=param_grid, cv=3, verbose=True, n_jobs=-1)
     best_clf = clf.fit(X, y)
-    print(best_clf.best_params_)
+
     return best_clf, best_clf.best_params_
 
 
