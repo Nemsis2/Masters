@@ -43,7 +43,7 @@ def test_lr(feature_type, n_feature, threshold):
     --------
     auc: average auc over all outer folds.
 
-    sens: avearge sensitivity over all outer folds.
+    sens: average sensitivity over all outer folds.
 
     spec: average specificity over all outer folds.
     """
@@ -189,7 +189,7 @@ def main():
         if feature_type == 'mfcc':
             features = [13, 26, 39]
         elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180] 
+            features = [80, 128, 180]
         
         for n_feature in features:
             # get the optimal threshold based off the EER

@@ -99,8 +99,8 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
             # grab the dev data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
             data, labels, names = extract_dev_data(k_fold_path, inner)
-            
-            data = normalize_mfcc(data)
+            if feature_type == 'mfcc':
+                data = normalize_mfcc(data)
             X = np.array([np.mean(x, axis=0) for x in data])
             labels = labels.astype("int")
 

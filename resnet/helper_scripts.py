@@ -13,6 +13,23 @@ def to_categorical(y, num_classes):
       return np.eye(num_classes, dtype='float')[np.array(y).astype(int)]
 
 
+#https://stackoverflow.com/questions/54846905/pytorch-get-all-layers-of-model
+def nested_children(m: th.nn.Module):
+    children = dict(m.named_children())
+    output = {}
+    if children == {}:
+        # if module has no children; m is last child! :O
+        return m
+    else:
+        # look for children from children... to the last child!
+        for name, child in children.items():
+            try:
+                output[name] = nested_children(child)
+            except TypeError:
+                output[name] = nested_children(child)
+    return output
+
+
 #https://stackoverflow.com/questions/52679734/how-to-create-new-folder-each-time-i-run-script
 def create_new_folder(folder_path):
       folder_names = os.listdir(folder_path)
@@ -126,13 +143,12 @@ def calculate_sens_spec(patient_true_predictions, patient_predictions):
 """
 save the model
 """
-def save_model(model, working_folder, train_outer_fold, train_inner_fold, epochs, model_path, model_melspec):
-      if train_inner_fold == None:
-            pickle.dump(model, open(model_path + working_folder + "/" + model.name + model_melspec + "_outer_fold_" + str(train_outer_fold) + 
-                        "_inner_fold_" + str(train_inner_fold), 'wb')) # save the model
-      else:
-            pickle.dump(model, open(model_path + working_folder + "/" + model.name + model_melspec + "_outer_fold_" + str(train_outer_fold) + 
-                        "_inner_fold_" + str(train_inner_fold), 'wb')) # save the model
+def save_model(model, feature_type, n_feature, model_type, outer, inner):
+      model_path = f'../../models/tb/resnet/{model.name}/{feature_type}/{n_feature}_{feature_type}/{model_type}'
+      if model_type == 'dev':
+            pickle.dump(model, open(f'{model_path}/{model.name}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+      if model_type == 'ts' or model_type == 'ts_2':
+            pickle.dump(model, open(f'{model_path}/{model.name}_{feature_type}_{n_feature}_outer_fold_{outer}', 'wb')) # save the model
 
                   
 """
@@ -148,9 +164,9 @@ def to_softmax(results):
 log info from a test
 """
 def log_test_info(test_fold, auc, sens, spec):
-      logging.basicConfig(filename="log.txt", filemode='a', level=logging.INFO)
-      logging_info = "Final performance for test fold:", str(test_fold), "AUC:", str(auc), "Sens", str(sens), "Spec", str(spec)
-      logging.info(logging_info)
+    logging.basicConfig(filename="log.txt", filemode='a', level=logging.INFO)
+    logging_info = "Final performance for test fold:", str(test_fold), "AUC:", str(auc), "Sens", str(sens), "Spec", str(spec)
+    logging.info(logging_info)
 
 
 """
@@ -179,6 +195,8 @@ def get_EER_threshold(y, results):
       
       return optimal_threshold
 
+
+
 def get_oracle_thresholds(results, labels, threshold):
       sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
       for i in range(len(threshold)):
@@ -186,24 +204,32 @@ def get_oracle_thresholds(results, labels, threshold):
             sens, spec = calculate_sens_spec(labels, thresholded_results)
             sens_threshold[i] = np.abs(sens-0.9)
             spec_threshold[i] = np.abs(spec-0.7)
-    
+
       sens = np.nanargmin(sens_threshold)
       spec = np.nanargmin(spec_threshold)
 
       return threshold[sens], threshold[spec]
 
-def load_model(model_path):
-      model = pickle.load(open(model_path, 'rb')) # load in the model
-      return model
+def gather_results(results, labels, names):
+      """
+      Description:
+      ---------
 
-def select_features(train_data, dev_data, feature_priority, feature):
-      chosen_features, chosen_features_dev = [], []
-      for prev_select_feature in feature_priority:
-            chosen_features.append(np.asarray(train_data[:,int(prev_select_feature)]))
-            chosen_features_dev.append(np.asarray(dev_data[:,int(prev_select_feature)]))
-      chosen_features.append(np.asarray(train_data[:,feature]))
-      chosen_features_dev.append(np.asarray(dev_data[:,feature]))
-      chosen_features = th.as_tensor(np.stack(chosen_features, -1))
-      chosen_features_dev = th.as_tensor(np.stack(chosen_features_dev, -1))
+      Inputs:
+      ---------
+            results: multiple model prob predictions for each value in the data with shape num_models x num_data_samples
 
-      return chosen_features, chosen_features_dev
+            labels: list or array which contains a label for each value in the data
+
+            names: list or array of patient_id associated with each value in the data
+
+      Outputs:
+      --------
+            out[:,1]: averaged model prob predictions for each unique patient_id in names
+
+            out[:,2]: label associated with each value in out[:,1]
+      """
+
+      unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+      out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
+      return out[:,1], out[:,2]

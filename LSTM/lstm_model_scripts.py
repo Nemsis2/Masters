@@ -170,7 +170,7 @@ class bi_lstm_package():
                   pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}', 'wb')) # save the model
         
 #Currently broken
-      def val_on_select(self, num_features):
+      def dev_on_select(self, num_features):
             data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
 
             # preprocess data and get batches
@@ -278,31 +278,6 @@ class bi_lstm_package():
             test_labels = out[:,2]
             
             return results, test_labels
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -452,23 +427,6 @@ def train_ts_2(x, y, model, inner_models, lengths, criterion_kl):
 """
 train a model on a specific inner fold within an outer fold.
 """
-def train_model(data, labels, model, epochs, batch_size, interpolate):
-      data, labels, lengths = create_batches(data, labels, interpolate, batch_size)
-      
-      # run through all the epochs
-      for epoch in range(epochs):
-            print("epoch=", epoch)
-            train(data, labels, lengths, model)
-
-      # collect the garbage
-      del data, labels, lengths
-      gc.collect()
-
-      return model
-
-"""
-train a model on a specific inner fold within an outer fold.
-"""
 def train_model_on_features(train_outer_fold, train_inner_fold, model, working_folder, epochs, batch_size, interpolate, num_features, model_path):
       if train_inner_fold == None:
             data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
@@ -586,78 +544,6 @@ def validate_model_patients(model, train_outer_fold, train_inner_fold, interpola
 #                                                           #
 #                                                           #
 #############################################################
-
-
-"""
-tests a singular model and makes predictions per patient.
-"""
-def test_patients(model, test_fold, interpolate, batch_size, threshold):
-      # read in the test set
-      test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
-
-      # preprocess data and get batches
-      test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, interpolate, batch_size)
-      
-      # test model
-      results = test(test_data, model, lengths)
-
-      # stack the results
-      results = np.vstack(results)
-      test_labels = np.vstack(test_labels)
-
-      # get the average prediction per patient
-      unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
-      out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
-      results = out[:,1]
-      test_labels = out[:,2]
-
-      # set results per threshold and get the auc
-      auc = roc_auc_score(test_labels, results)
-      results = (np.array(results)>threshold).astype(np.int8)
-      sens, spec = calculate_sens_spec(test_labels, results)
-
-      # mark variable and then call the garbage collector to ensure memory is freed
-      del test_data, test_labels, test_names, results
-      gc.collect()
-
-      return auc, sens, spec
-
-
-"""
-uses group decision making to make predictions per patient.
-"""
-def test_models_patients(models, test_fold, interpolate, batch_size, threshold):
-      test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", test_fold)
-      
-      # preprocess data and get batches
-      test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, interpolate, batch_size)
-            
-      results = []
-      for model in models:
-            results.append(test(test_data, model.model, lengths)) # do a forward pass through the models
-
-      for i in range(len(results)):
-            results[i] = np.vstack(results[i])
-
-      test_labels = np.vstack(test_labels)
-
-      for i in range(len(results)):
-            unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
-            out = np.column_stack((unq,np.bincount(ids,results[i][:,0])/count, np.bincount(ids,test_labels[:,0])/count))
-            results[i] = out[:,1]
-
-      test_labels = out[:,2]
-
-      # total the predictions over all models
-      results = sum(results)/4
-      auc = roc_auc_score(test_labels, results)
-      results = (np.array(results)>threshold).astype(np.int8)
-      sens, spec = calculate_sens_spec(test_labels, results)
-
-      del test_data, test_labels, test_names, results, lengths
-      gc.collect()
-
-      return auc, sens, spec
 
 
 """
