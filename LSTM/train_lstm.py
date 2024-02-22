@@ -139,6 +139,23 @@ def create_ts_lstm_2(feature_type, n_feature):
         print(f'Models already exist for type:ts_2_{n_feature}_{feature_type}. Skipping...')
 
 
+def create_fss_lstm(feature_type, n_feature, fss_feature):
+    # set the model path
+    model_path = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/'
+    for outer in range(NUM_OUTER_FOLDS):
+        print("Outer fold=", outer)
+        
+        for inner in range(NUM_INNER_FOLDS):
+            print("Inner fold=", inner)
+
+            if feature_type == 'melspec' or feature_type == 'lfb':
+                model = bi_lstm_package(fss_feature, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss', n_feature, feature_type)
+            elif feature_type == 'mfcc':
+                model = bi_lstm_package(fss_feature, HIDDEN_DIM[outer], LSTM_LAYERS[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss', n_feature, feature_type)
+
+            model.train_fss(fss_feature)
+            model.save(fss_feature)
+
 
 def main():
     for feature_type in ['mfcc', 'melspec', 'lfb']:
@@ -154,6 +171,12 @@ def main():
             create_ts_lstm(feature_type, n_feature)
 
             create_ts_lstm_2(feature_type, n_feature)
+
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
+                if feature_type == 'mfcc':
+                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                else:
+                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature))
     
 if __name__ == "__main__":
     main()

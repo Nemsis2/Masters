@@ -24,7 +24,7 @@ if device != "cuda":
     exit(1)
 
 
-def test_resnet(feature_type, n_feature, model, threshold):
+def test_em_resnet(feature_type, n_feature, model_type, threshold):
     """
     Description:
     ---------
@@ -53,20 +53,24 @@ def test_resnet(feature_type, n_feature, model, threshold):
 
         for inner in range(NUM_INNER_FOLDS):
             # get the testing models
-            model_path = f'../../models/tb/{model}/{feature_type}/{n_feature}_{feature_type}/dev/{model}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model_path = f'../../models/tb/resnet/{model_type}/{feature_type}/{n_feature}_{feature_type}/dev/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
             models.append(pickle.load(open(model_path, 'rb'))) # load in the model
 
         # grab the testing data
         k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
-        data, labels, names = extract_test_data(k_fold_path, feature_type)
+        data, labels, names = extract_test_data(k_fold_path)
         if feature_type == 'mfcc':
             data = normalize_mfcc(data)
-        data, labels, lengths = create_batches(data, labels, 'image', BATCH_SIZE)
+        data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
 
         results = []
         for model in models:
-            results.append(test(data, model, lengths)) # do a forward pass through the models
+            results.append(test(data, model.model, lengths)) # do a forward pass through the models
 
+        for i in range(len(results)):
+            results[i] = np.vstack(results[i])
+        
+        labels = np.vstack(labels)
         output = []
         for i in range(len(results)):
             new_results, new_labels = gather_results(results[i], labels, names)
@@ -85,7 +89,8 @@ def test_resnet(feature_type, n_feature, model, threshold):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
-def get_resnet_threshold(model, feature_type, n_feature):
+
+def get_resnet_threshold(model_type, feature_type, n_feature):
     thresholds = []
     for outer in range(NUM_OUTER_FOLDS):
         
@@ -93,7 +98,7 @@ def get_resnet_threshold(model, feature_type, n_feature):
         threshold = 0
         for inner in range(NUM_INNER_FOLDS):
             # get the testing models
-            model_path = f'../../models/tb/{model}/{feature_type}/{n_feature}_{feature_type}/dev/{model}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model_path = f'../../models/tb/resnet/{model_type}/{feature_type}/{n_feature}_{feature_type}/dev/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
             model = pickle.load(open(model_path, 'rb')) # load in the model
 
             # grab and preprocess data
@@ -101,10 +106,12 @@ def get_resnet_threshold(model, feature_type, n_feature):
             data, labels, names = extract_dev_data(k_fold_path, inner)
             if feature_type == 'mfcc':
                 data = normalize_mfcc(data)
-            data, labels, lengths = create_batches(data, labels, 'image', BATCH_SIZE)
+            data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
             
             # calculate inner decision threshold
-            results = test(data, model, lengths)
+            results = test(data, model.model, lengths)
+            results = np.vstack(results)
+            labels = np.vstack(labels)
             results, labels = gather_results(results, labels, names)
             threshold += get_EER_threshold(labels, results)
 
@@ -122,9 +129,9 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            for model in ['resnet_18', 'resnet_10', 'resnet6_2Deep', 'resnet6_4Deep']:
-                threshold = get_resnet_threshold(feature_type, n_feature)
-                auc, sens, spec = test_resnet(feature_type, n_feature, model, threshold)
+            for model in ['resnet_18', 'resnet_10', 'resnet_6_2Deep', 'resnet_6_4Deep']:
+                threshold = get_resnet_threshold(model, feature_type, n_feature)
+                auc, sens, spec = test_em_resnet(feature_type, n_feature, model, threshold)
 
                 print(f'AUC for {n_feature}_{feature_type}: {auc}')
                 print(f'Sens for {n_feature}_{feature_type}: {sens}')

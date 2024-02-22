@@ -50,7 +50,7 @@ def reshape_data(data):
 """
 Break the data and corresponding labels into batches
 """
-def create_batches(data, labels, interpolation, batch_size):
+def create_batches(data, labels, names, interpolation, batch_size):
     batched_data = []
     batched_labels = []
     data_lengths = []
@@ -64,6 +64,7 @@ def create_batches(data, labels, interpolation, batch_size):
     if interpolation == 'image':
         data, del_indx = reshape_data(data)
         labels = np.delete(labels, del_indx)
+        names = np.delete(names, del_indx)
 
 
     for i in range(int(np.ceil(len(data)/batch_size))):
@@ -77,10 +78,10 @@ def create_batches(data, labels, interpolation, batch_size):
             batched_lengths.append(data_lengths[i*batch_size:])
 
     for i in range(len(batched_data)):
-        batched_data[i] = th.as_tensor(np.vstack(batched_data[i]))
+        batched_data[i] = th.as_tensor(np.vstack(batched_data[i])).float()
         batched_labels[i] = th.as_tensor(np.vstack(to_categorical(batched_labels[i],2)))
 
-    return batched_data, batched_labels, batched_lengths
+    return batched_data, batched_labels, batched_lengths, names
 
 
 

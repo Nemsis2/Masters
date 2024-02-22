@@ -136,20 +136,24 @@ class bi_lstm_package():
             gc.collect()
 
 
-#Currently broken
-      def train_on_select(self, num_features):
-            if self.inner == None:
-                  data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
-                  features = dataset_fss(num_features)
-            else:
-                  data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, self.outer)
-                  features = dataset_fss(num_features)
+      def train_fss(self, fss_feature):
+            data, labels = extract_inner_fold_data(self.k_fold_path, self.inner)
+
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
 
             data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
-
+            # select only the relevant features
+            feature_path = f'../../models/tb/lr/{self.feature_type}/{self.n_feature}_{self.feature_type}/fss/docs/'
+            if self.feature_type == 'mfcc':
+                  selected_features = dataset_fss(self.n_feature*3, fss_feature, feature_path)
+            else:
+                  selected_features = dataset_fss(self.n_feature, fss_feature, feature_path)
+            
+            print(selected_features)
             for batch in range(len(data)):
                   chosen_features = []
-                  for feature in features:
+                  for feature in selected_features:
                         chosen_features.append(np.asarray(data[batch][:,:,feature]))
                   data[batch] = th.as_tensor(np.stack(chosen_features, -1))
             
@@ -162,26 +166,36 @@ class bi_lstm_package():
             del data, labels, lengths
             gc.collect()
 
-      def save(self):
+      def save(self, fss_feature=0):
             model_path = f'../../models/tb/lstm/{self.feature_type}/{self.n_feature}_{self.feature_type}/{self.model_type}'
             if self.model_type == 'dev':
                   pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}_inner_fold_{self.inner}', 'wb')) # save the model
-            if self.model_type == 'ts' or self.model_type == 'ts_2':
+            elif self.model_type == 'ts' or self.model_type == 'ts_2':
                   pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_outer_fold_{self.outer}', 'wb')) # save the model
+            elif self.model_type =='fss':
+                  pickle.dump(self, open(f'{model_path}/lstm_{self.feature_type}_{self.n_feature}_fss_{fss_feature}_outer_fold_{self.outer}_inner_fold_{self.inner}', 'wb')) # save the model
         
-#Currently broken
-      def dev_on_select(self, num_features):
-            data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, self.outer, self.inner)
 
-            # preprocess data and get batches
+      def dev_fss(self, fss_feature):
+            # read in the test set
+            data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
+
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
+            
             data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
-            features = inner_fss(self.inner, self.outer, num_features)
-
+            # select only the relevant features
+            feature_path = f'../../models/tb/lr/{self.feature_type}/{self.n_feature}_{self.feature_type}/fss/docs/'
+            if self.feature_type == 'mfcc':
+                  selected_features = dataset_fss(self.n_feature*3, fss_feature, feature_path)
+            else:
+                  selected_features = dataset_fss(self.n_feature, fss_feature, feature_path)
+            
             for batch in range(len(data)):
                   chosen_features = []
-                  for feature in features:
+                  for feature in selected_features:
                         chosen_features.append(np.asarray(data[batch][:,:,feature]))
-                  data[batch] = th.as_tensor(np.stack(chosen_features, -1))
+                  data[batch] = th.tensor(np.stack(chosen_features, -1))
 
             results = []
             for i in range(len(data)):
@@ -190,16 +204,11 @@ class bi_lstm_package():
 
             results = np.vstack(results)
             labels = np.vstack(labels)
+            results, labels = gather_results(results, labels, names)
+            threshold  = get_EER_threshold(labels, results)
+            
+            return threshold
 
-            unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-            results = out[:,1]
-            labels = out[:,2]
-
-            fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
-            threshold = threshold[np.nanargmin(np.absolute(([1 - tpr] - fpr)))]
-
-            return results, labels, threshold
 
       def dev(self, return_threshold=False, return_auc=False):
             data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
@@ -249,35 +258,36 @@ class bi_lstm_package():
 
             return results, labels, names
 
-#Currently broken
-      def test_on_select(self, num_features):
+      def test_fss(self, fss_feature):
             # read in the test set
-            test_data, test_labels, test_names = extract_test_data(K_FOLD_PATH + "test/test_dataset_mel_180_fold_", self.outer)
+            data, labels, names = extract_test_data(self.test_path)
 
-            # preprocess data and get batches
-            test_data, test_labels, test_names, lengths = create_test_batches(test_data, test_labels, test_names, "linear", self.batch_size)
-            features = dataset_fss(num_features)
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
             
-            for batch in range(len(test_data)):
+            data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+            # select only the relevant features
+            feature_path = f'../../models/tb/lr/{self.feature_type}/{self.n_feature}_{self.feature_type}/fss/docs/'
+            if self.feature_type == 'mfcc':
+                  selected_features = dataset_fss(self.n_feature*3, fss_feature, feature_path)
+            else:
+                  selected_features = dataset_fss(self.n_feature, fss_feature, feature_path)
+            
+            for batch in range(len(data)):
                   chosen_features = []
-                  for feature in features:
-                        chosen_features.append(np.asarray(test_data[batch][:,:,feature]))
-                  test_data[batch] = th.tensor(np.stack(chosen_features, -1))
+                  for feature in selected_features:
+                        chosen_features.append(np.asarray(data[batch][:,:,feature]))
+                  data[batch] = th.tensor(np.stack(chosen_features, -1))
 
             results = []
-            for i in range(len(test_data)):
+            for i in range(len(data)):
                   with th.no_grad():
-                        results.append(to_softmax((self.model((test_data[i]).to(device), lengths[i])).cpu()))
+                        results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
 
             results = np.vstack(results)
-            test_labels = np.vstack(test_labels)
-
-            unq,ids,count = np.unique(test_names,return_inverse=True,return_counts=True)
-            out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,test_labels[:,0])/count))
-            results = out[:,1]
-            test_labels = out[:,2]
+            labels = np.vstack(labels)
             
-            return results, test_labels
+            return results, labels, names
 
 
 

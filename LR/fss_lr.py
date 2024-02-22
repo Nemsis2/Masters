@@ -35,12 +35,15 @@ def do_fss_lr(feature_type, n_feature):
     n_feature: (int) number of features.
     """
     model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
+    if feature_type == 'mfcc':
+        total_features = n_feature*3
+    else: total_features = n_feature
     for outer in range(NUM_OUTER_FOLDS):
         print("train_outer_fold=", outer)
         for inner in range(NUM_INNER_FOLDS):
             print("train_inner_fold=", inner)
             feature_priority, auc_priority = [], []
-            features = np.arange(0,n_feature)
+            features = np.arange(0,total_features)
             
             # load in training data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
@@ -55,7 +58,7 @@ def do_fss_lr(feature_type, n_feature):
             print(params)
 
             # iterate feature-1 times
-            while len(feature_priority) != n_feature:
+            while len(feature_priority) != total_features:
                 performance = []
                 # Pass through all unselected features
                 for feature in features:
@@ -92,20 +95,20 @@ def do_fss_lr(feature_type, n_feature):
                 features = np.delete(features, best_feature)
                 
                 #save current feature list
-                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/features_outer_{outer}_inner_{inner}.txt'
+                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/features_outer_{outer}_inner_{inner}.txt'
                 with open(file_name, 'w') as f:
                     for feature in feature_priority:
                         f.write("%s\n" % feature)
 
                 # save current auc list
-                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/auc_outer_{outer}_inner_{inner}.txt'
+                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/auc_outer_{outer}_inner_{inner}.txt'
                 with open(file_name, 'w') as f:
                     for auc in auc_priority:
                         f.write("%s\n" % auc)
 
 
 def main():
-    for feature_type in ['mfcc', 'melspec', 'lfb']:
+    for feature_type in ['mfcc']:
         if feature_type == 'mfcc':
             features = [13, 26, 39]
         elif feature_type == 'melspec' or feature_type == 'lfb':

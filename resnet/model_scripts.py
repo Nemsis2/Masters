@@ -26,7 +26,7 @@ class Resnet18():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001, weight_decay=1e-4)
             self.name = "resnet_18"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=30)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
 
 
 class Resnet10():
@@ -35,7 +35,7 @@ class Resnet10():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_10"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=30)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
 
 
 class Resnet6_4Deep():
@@ -44,7 +44,7 @@ class Resnet6_4Deep():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_6_4Deep"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=30)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
 
 
 class Resnet6_2Deep():
@@ -53,7 +53,7 @@ class Resnet6_2Deep():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_6_2Deep"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=30)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
 
 
 #############################################################

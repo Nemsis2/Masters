@@ -173,6 +173,44 @@ def test_ts_lstm_2(feature_type, n_feature):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
+def test_fss_lstm(feature_type, n_feature, fss_feature):
+    """
+    Description:
+    ---------
+    
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):
+
+        outer_results = []
+        threshold = 0
+        for inner in range(NUM_INNER_FOLDS):
+            # get the dev model
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
+            threshold += model.dev_fss(fss_feature) # get the decision threshold for this inner fold
+            results, labels, names = model.test_fss(fss_feature) # do a forward pass through the models
+            results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
+            outer_results.append(results)
+
+        # get auc
+        results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
+        auc += roc_auc_score(labels, results)
+
+        # use threshold and get sens and spec
+        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
+        sens_, spec_ = calculate_sens_spec(labels, results)
+        sens += sens_
+        spec += spec_
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
+
 
 
 def main():
@@ -206,6 +244,19 @@ def main():
             print(f'AUC for ts_2 {n_feature}_{feature_type}: {auc}')
             print(f'Sens for ts_2 {n_feature}_{feature_type}: {sens}')
             print(f'Spec for ts_2 {n_feature}_{feature_type}: {spec}')
+
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
+                if feature_type == 'mfcc':
+                    auc, sens, spec = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                    print(f'AUC for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {auc}')
+                    print(f'Sens for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {sens}')
+                    print(f'Spec for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {spec}')
+                else:
+                    auc, sens, spec = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature))
+                    print(f'AUC for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {auc}')
+                    print(f'Sens for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {sens}')
+                    print(f'Spec for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {spec}')
+
     
 if __name__ == "__main__":
     main()

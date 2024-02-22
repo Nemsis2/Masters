@@ -1,7 +1,6 @@
 # libraries
 import torch as th
 import gc
-import os
 
 # custom scripts
 from helper_scripts import *
@@ -25,7 +24,7 @@ if device != "cuda":
     exit(1)
 
 
-def create_inner_resnet(feature_type, n_feature, model, model_type='dev'):
+def create_inner_resnet(feature_type, n_feature, model_type='dev'):
     """
     Description:
     ---------
@@ -40,48 +39,41 @@ def create_inner_resnet(feature_type, n_feature, model, model_type='dev'):
     model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
     
     """
-    model_path = f'../../models/tb/{model.name}/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
-    
-    if len(os.listdir(model_path)) == 0: # if the folder is empty
-        print(f'Creating {model_type} models for {n_feature}_{feature_type}')
+    for outer in range(NUM_OUTER_FOLDS):
+        print("Outer fold=", outer)
+        
+        for inner in range(NUM_INNER_FOLDS):
+            print("Inner fold=", inner)
 
-        for outer in range(NUM_OUTER_FOLDS):
-            print("Outer fold=", outer)
-            
-            for inner in range(NUM_INNER_FOLDS):
-                print("Inner fold=", inner)
+            k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+            data, labels = extract_inner_fold_data(k_fold_path, inner)
+            if feature_type == 'mfcc':
+                data = normalize_mfcc(data)
+            data, labels, lengths = create_batches(data, labels, 'image', BATCH_SIZE)
 
-                k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-                data, labels = extract_inner_fold_data(k_fold_path, inner)
-                if feature_type == 'mfcc':
-                    data = normalize_mfcc(data)
-                data, labels, lengths = create_batches(data, labels, 'image', BATCH_SIZE)
-
+            for model in [Resnet18(), Resnet10(), Resnet6_2Deep(), Resnet6_4Deep()]:
+                print(f'Creating {model.name}_{model_type} models for {n_feature}_{feature_type}')
                 # run through all the epochs
                 for epoch in range(EPOCHS):
                     print("epoch=", epoch)
                     train(data, labels, lengths, model)
 
-                # collect the garbage
-                del data, labels, lengths
-                gc.collect()
-
                 save_model(model, feature_type, n_feature, model_type, outer, inner)
-    
-    else:
-        print(f'Models already exist for type:{model_type}_{n_feature}_{feature_type}. Skipping...')
+
+            # collect the garbage
+            del data, labels, lengths
+            gc.collect()
 
 
 def main():
-    for feature_type in ['mfcc', 'melspec', 'lfb']:
+    for feature_type in ['lfb']:
         if feature_type == 'mfcc':
             features = [13, 26, 39]
         elif feature_type == 'melspec' or feature_type == 'lfb':
             features = [80, 128, 180] 
         
         for n_feature in features:
-            for model in [Resnet18(), Resnet10(), Resnet6_2Deep(), Resnet6_4Deep]:
-                create_inner_resnet(feature_type, n_feature, model, 'dev')
+            create_inner_resnet(feature_type, n_feature, 'dev')
             
 
 if __name__ == "__main__":

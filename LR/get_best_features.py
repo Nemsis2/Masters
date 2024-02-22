@@ -135,7 +135,7 @@ def outer_fss(outer, num_features):
 
 
 
-def dataset_fss(num_features, feature_path):
+def dataset_fss(total_features, num_features, feature_path):
     """
     Uses previously generated SFS results to determine the highest "scoring" features across all outer folds.
 
@@ -150,7 +150,7 @@ def dataset_fss(num_features, feature_path):
     """
 
     #find files
-    fold_feature = np.zeros(180)
+    fold_feature = np.zeros(total_features)
     selected_features = []
 
     for outer in range(3):

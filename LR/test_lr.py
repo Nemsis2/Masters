@@ -140,13 +140,20 @@ def test_lr_multi_feature():
 
 # untested
 # check feature summing selection method
-def test_lr_fss(feature_type, n_feature, threshold):
+def test_lr_fss(feature_type, n_feature, threshold, fss_features):
+    feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+    if feature_type == 'mfcc':
+        selected_features = dataset_fss(n_feature*3, fss_features, feature_path)
+    else:
+        selected_features = dataset_fss(n_feature, fss_features, feature_path)
+
+    auc, sens, spec = 0,0,0 
     for outer in range(NUM_OUTER_FOLDS):
         models = []
         
         for inner in range(NUM_INNER_FOLDS):
             # get the testing models
-            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/lr_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}'
             models.append(pickle.load(open(model_path, 'rb'))) # load in the model
 
         # grab the testing data
@@ -154,10 +161,8 @@ def test_lr_fss(feature_type, n_feature, threshold):
         data, labels, names = load_test_data(k_fold_path, feature_type)
 
         # select only the relevant features
-        feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
-        selected_features = dataset_fss(n_feature, feature_path)
         chosen_features = []
-        for i in range(n_feature):
+        for i in range(len(selected_features)):
             chosen_features.append(np.asarray(data[:,selected_features[i]]))
         chosen_features = th.as_tensor(np.stack(chosen_features, -1))
 
@@ -201,6 +206,19 @@ def main():
             print(f'AUC for {n_feature}_{feature_type}: {auc}')
             print(f'Sens for {n_feature}_{feature_type}: {sens}')
             print(f'Spec for {n_feature}_{feature_type}: {spec}')
+            
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
+                if feature_type == 'mfcc':
+                    auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature*3))
+                else:
+                    auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature))
+            
+                print(f'AUC for {n_feature}_{feature_type}: {auc}')
+                print(f'Sens for {n_feature}_{feature_type}: {sens}')
+                print(f'Spec for {n_feature}_{feature_type}: {spec}')
+
+
+            
 
     auc = test_lr_multi_feature()
 
