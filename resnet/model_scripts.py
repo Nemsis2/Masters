@@ -14,6 +14,10 @@ from resnet import *
 
 # set the device
 device = "cuda" if th.cuda.is_available() else "cpu"
+print("device=", device)
+if device != "cuda":
+    print("exiting since cuda not enabled")
+    exit(1)
 
 # choose which melspec we will be working on
 MELSPEC = "180_melspec_fold_"

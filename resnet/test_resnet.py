@@ -1,7 +1,5 @@
 # libraries
 import torch as th
-import gc
-import os
 
 # custom scripts
 from helper_scripts import *

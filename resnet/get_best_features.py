@@ -1,8 +1,5 @@
 # libraries
-import torch as th
 import os
-import pickle
-from sklearn.metrics import roc_auc_score
 
 # custom scripts
 from helper_scripts import *

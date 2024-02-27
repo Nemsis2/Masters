@@ -49,7 +49,6 @@ if __name__ == '__main__':
                     f'Fold: {i} \n'  
                     f'type: {feature_type} \n'
                     )
-                print(n_mfccs[j])
                 dataset, splits = pipeline.kfold_combined_dataset(c_data, r_data, n_splits=4, feature=feature_type, win_length=win_length, hop_length=hop_length, n_mels=n_mels[j], n_mfccs=n_mfccs[j], n_bins=n_lfb[j])
                 
                 if feature_type == 'melspec':
