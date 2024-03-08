@@ -30,7 +30,7 @@ class Resnet18():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001, weight_decay=1e-4)
             self.name = "resnet_18"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=50)
 
 
 class Resnet10():
@@ -39,7 +39,7 @@ class Resnet10():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_10"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=50)
 
 
 class Resnet6_4Deep():
@@ -48,7 +48,7 @@ class Resnet6_4Deep():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_6_4Deep"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=50)
 
 
 class Resnet6_2Deep():
@@ -57,7 +57,7 @@ class Resnet6_2Deep():
             self.criterion = nn.CrossEntropyLoss()
             self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)
             self.name = "resnet_6_2Deep"
-            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=40)
+            self.scheduler = th.optim.lr_scheduler.OneCycleLR(self.optimizer, max_lr=1e-3, epochs=16, steps_per_epoch=50)
 
 
 #############################################################
@@ -93,7 +93,7 @@ def train(x, y, lengths, model):
 """
 complete a training step for a batch of data
 """
-def ensemble_train(x, y, model, inner_models, criterion_kl, lengths):
+def train_ts(x, y, model, inner_models, criterion_kl, lengths):
       model.model = model.model.to(device)
       for i in range(len(inner_models)):
             inner_models[i].model = inner_models[i].model.to(device)
@@ -101,8 +101,6 @@ def ensemble_train(x, y, model, inner_models, criterion_kl, lengths):
       # update the student model using the student predictions and the teachers predictions            
       inner_results = []
       for inner_model in inner_models:
-            if model.name == "bi_lstm":
-                  th.manual_seed(inner_model.seed)
             inner_results.append(test(x, inner_model.model, lengths)) # do a forward pass through the models
       
       # total the predictions over all models

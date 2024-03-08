@@ -88,6 +88,43 @@ def test_lr(feature_type, n_feature, threshold):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
+def test_lr_sm(feature_type, n_feature, threshold):
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):
+        k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl' 
+        max_auc, best_model = 0, 0
+        for inner in range(NUM_INNER_FOLDS):
+            # get the testing models
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model = pickle.load(open(model_path, 'rb')) # load in the model
+            data, labels, names = load_dev_data(k_fold_path, feature_type, inner)
+            results, labels = gather_results(model.predict_proba(data), labels, names) # do a forward pass through the model
+            inner_auc = roc_auc_score(labels, results)
+            if inner_auc > max_auc:
+                max_auc = inner_auc
+                best_model = inner
+            
+        model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{best_model}'
+        model = pickle.load(open(model_path, 'rb')) # load in the model
+
+        # grab the testing data
+        k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
+        data, labels, names = load_test_data(k_fold_path, feature_type)
+
+        results = (model.predict_proba(data)) # do a forward pass through the models
+        results, labels = gather_results(results, labels, names)
+
+        inner_auc = roc_auc_score(labels, results)
+        results = (np.array(results)>threshold[outer]).astype(np.int8)
+        inner_sens, inner_spec = calculate_sens_spec(labels, results)
+        
+        # add to the total auc, sens and spec
+        auc += inner_auc
+        sens += inner_sens
+        spec += inner_spec
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
 
 def test_lr_multi_feature():
     """
@@ -137,9 +174,6 @@ def test_lr_multi_feature():
     return auc/NUM_OUTER_FOLDS
 
 
-
-# untested
-# check feature summing selection method
 def test_lr_fss(feature_type, n_feature, threshold, fss_features):
     feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
     if feature_type == 'mfcc':
@@ -203,22 +237,32 @@ def main():
             # test the em setup
             auc, sens, spec = test_lr(feature_type, n_feature, threshold)
 
-            print(f'AUC for {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for {n_feature}_{feature_type}: {spec}')
+            print(f'AUC for em {n_feature}_{feature_type}: {auc}')
+            print(f'Sens for em {n_feature}_{feature_type}: {sens}')
+            print(f'Spec for em {n_feature}_{feature_type}: {spec}')
+
+            """
+            # test the sm setup
+            auc, sens, spec = test_lr_sm(feature_type, n_feature, threshold)
+
+            print(f'AUC for sm {n_feature}_{feature_type}: {auc}')
+            print(f'Sens for sm {n_feature}_{feature_type}: {sens}')
+            print(f'Spec for sm {n_feature}_{feature_type}: {spec}')
+            """
             
+
+            """
             for fraction_of_feature in [0.1, 0.2, 0.5]:
                 if feature_type == 'mfcc':
                     auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature*3))
                 else:
                     auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature))
             
-                print(f'AUC for {n_feature}_{feature_type}: {auc}')
-                print(f'Sens for {n_feature}_{feature_type}: {sens}')
-                print(f'Spec for {n_feature}_{feature_type}: {spec}')
-
-
-            
+                print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {auc}')
+                print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {sens}')
+                print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {spec}')
+            """
+               
 
     auc = test_lr_multi_feature()
 

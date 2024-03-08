@@ -87,6 +87,98 @@ def test_em_resnet(feature_type, n_feature, model_type, threshold):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
+def test_sm_resnet(feature_type, n_feature, model_type, threshold):
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):
+        
+        dev_auc = 0
+        for inner in range(NUM_INNER_FOLDS):
+            # get the dev model
+            model_path = f'../../models/tb/resnet/{model_type}/{feature_type}/{n_feature}_{feature_type}/dev/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            model = pickle.load(open(model_path, 'rb')) # load in the model
+
+            # grab the dev data
+            k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl' 
+            data, labels, names = extract_dev_data(k_fold_path, inner)
+            if feature_type == 'mfcc':
+                data = normalize_mfcc(data)
+            data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
+
+            # assess model performance
+            results = test(data, model.model, lengths)
+            results = np.vstack(results)
+            labels = np.vstack(labels)
+            results, labels = gather_results(results, labels, names)
+            inner_auc = roc_auc_score(labels, results)
+
+            # check if current dev auc is better than previous best
+            if inner_auc > dev_auc:
+                dev_auc = inner_auc
+                best_inner = inner
+
+        # get the best performing dev model
+        model_path = f'../../models/tb/resnet/{model_type}/{feature_type}/{n_feature}_{feature_type}/dev/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{best_inner}'
+        model = pickle.load(open(model_path, 'rb')) # load in the model
+
+        # grab the testing data
+        k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
+        data, labels, names = extract_test_data(k_fold_path)
+        if feature_type == 'mfcc':
+            data = normalize_mfcc(data)
+        data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
+
+        # test and gather results
+        results = test(data, model.model, lengths) # do a forward pass through the models
+        results = np.vstack(results)
+        labels = np.vstack(labels)
+        results, labels = gather_results(results, labels, names)
+
+        # get auc, sens and spec
+        inner_auc = roc_auc_score(labels, results)
+        results = (np.array(results)>threshold[outer]).astype(np.int8)
+        inner_sens, inner_spec = calculate_sens_spec(labels, results)
+        
+        # add to the total auc, sens and spec
+        auc += inner_auc
+        sens += inner_sens
+        spec += inner_spec
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
+
+def test_ts_resnet(feature_type, n_feature, model_type, threshold):
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):
+        # get the ts model
+        model_path = f'../../models/tb/resnet/{model_type}/{feature_type}/{n_feature}_{feature_type}/ts/{model_type}_{feature_type}_{n_feature}_outer_fold_{outer}'
+        model = pickle.load(open(model_path, 'rb')) # load in the model
+
+        # grab the testing data
+        k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
+        data, labels, names = extract_test_data(k_fold_path)
+        if feature_type == 'mfcc':
+            data = normalize_mfcc(data)
+        data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
+
+        # test and gather results
+        results = test(data, model.model, lengths) # do a forward pass through the models
+        results = np.vstack(results)
+        labels = np.vstack(labels)
+        results, labels = gather_results(results, labels, names)
+
+        # get auc, sens and spec
+        inner_auc = roc_auc_score(labels, results)
+        results = (np.array(results)>threshold[outer]).astype(np.int8)
+        inner_sens, inner_spec = calculate_sens_spec(labels, results)
+        
+        # add to the total auc, sens and spec
+        auc += inner_auc
+        sens += inner_sens
+        spec += inner_spec
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
+
 
 def get_resnet_threshold(model_type, feature_type, n_feature):
     thresholds = []
@@ -126,14 +218,26 @@ def main():
         elif feature_type == 'melspec' or feature_type == 'lfb':
             features = [80, 128, 180] 
         
-        for n_feature in features:
-            for model in ['resnet_18', 'resnet_10', 'resnet_6_2Deep', 'resnet_6_4Deep']:
+        for model in ['resnet_18', 'resnet_10', 'resnet_6_2Deep', 'resnet_6_4Deep']:
+            for n_feature in features:
                 threshold = get_resnet_threshold(model, feature_type, n_feature)
                 auc, sens, spec = test_em_resnet(feature_type, n_feature, model, threshold)
 
-                print(f'AUC for {n_feature}_{feature_type}: {auc}')
-                print(f'Sens for {n_feature}_{feature_type}: {sens}')
-                print(f'Spec for {n_feature}_{feature_type}: {spec}')
+                print(f'AUC for em_{model}_{n_feature}_{feature_type}: {auc}')
+                print(f'Sens for em_{model}_{n_feature}_{feature_type}: {sens}')
+                print(f'Spec for em_{model}_{n_feature}_{feature_type}: {spec}')
+
+                auc, sens, spec = test_sm_resnet(feature_type, n_feature, model, threshold)
+
+                print(f'AUC for sm_{model}_{n_feature}_{feature_type}: {auc}')
+                print(f'Sens for sm_{model}_{n_feature}_{feature_type}: {sens}')
+                print(f'Spec for sm_{model}_{n_feature}_{feature_type}: {spec}')
+
+                auc, sens, spec = test_ts_resnet(feature_type, n_feature, model, threshold)
+
+                print(f'AUC for ts_{model}_{n_feature}_{feature_type}: {auc}')
+                print(f'Sens for ts_{model}_{n_feature}_{feature_type}: {sens}')
+                print(f'Spec for ts_{model}_{n_feature}_{feature_type}: {spec}')
             
 
 if __name__ == "__main__":

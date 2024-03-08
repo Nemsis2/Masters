@@ -72,19 +72,21 @@ def extract_outer_fold_data(path):
     for inner_fold in data.keys():
         if inner_fold == ("fold_" + str(0)):
             # get the training data
-            for i, t in zip( data[inner_fold]['train']['inps'], data[inner_fold]['train']['tgts']):
-                batch.append([i, t])
+            for i,t,p in zip( data[inner_fold]['train']['inps'], data[inner_fold]['train']['tgts'], data[inner_fold]['train']['p']):
+                batch.append([i,t,p])
 
             for labels in data[inner_fold]['val'].keys():
                 # get the validation data
-                for i,t in zip( data[inner_fold]['val'][labels]['inps'], data[inner_fold]['val'][labels]['tgts']):
-                        batch.append([i,t])
+                for i,t,p in zip( data[inner_fold]['val'][labels]['inps'], data[inner_fold]['val'][labels]['tgts'], data[inner_fold]['val'][labels]['p']):
+                        batch.append([i,t,p])
 
     batch = np.array(batch, dtype=object)
     batch_data = batch[:,0] # get the data from the batch
     batch_labels = batch[:,1] # get the labels from the batch
+    batch_names = batch[:,2]
+    batch_names = np.array(sort_patient_id(batch_names))
     
-    return batch_data, batch_labels
+    return batch_data, batch_labels, batch_names
 
 
 def extract_dev_data(path, inner_fold):
@@ -189,6 +191,7 @@ def load_dev_data(k_fold_path, feature_type, inner):
       data = np.array([np.mean(x, axis=0) for x in data])
 
       return data, labels.astype("int"), names
+
 
 def load_test_data(k_fold_path, feature_type):
       data, labels, names = extract_test_data(k_fold_path)

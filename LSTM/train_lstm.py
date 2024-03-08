@@ -94,7 +94,7 @@ def create_ts_lstm(feature_type, n_feature):
 
             models = []
             for inner in range(NUM_INNER_FOLDS):
-                  models.append(load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'))
+                models.append(load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'))
             
             model.train_ts(models)
             model.save()

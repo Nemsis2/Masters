@@ -260,3 +260,21 @@ def main():
     
 if __name__ == "__main__":
     main()
+
+
+
+"""
+def get_oracle_thresholds(results, labels, threshold):
+    sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
+    for i in range(len(threshold)):
+        thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
+        sens, spec = calculate_sens_spec(labels, thresholded_results)
+        sens_threshold[i] = np.abs(sens-0.9)
+        spec_threshold[i] = np.abs(spec-0.7)
+
+    print(sens_threshold)
+    sens = np.nanargmin(sens_threshold)
+    spec = np.nanargmin(spec_threshold)
+    print("sens", sens)
+    return threshold[sens], threshold[spec]
+"""

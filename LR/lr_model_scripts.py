@@ -5,7 +5,7 @@ import numpy as np
 import pickle
 
 # custom scripts
-from data_grab import extract_dev_data, normalize_mfcc
+from data_grab import extract_dev_data, extract_outer_fold_data, normalize_mfcc
 from helper_scripts import get_EER_threshold
 
 
