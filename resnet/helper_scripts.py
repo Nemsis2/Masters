@@ -150,6 +150,7 @@ def save_model(model, feature_type, n_feature, model_type, outer, inner):
       if model_type == 'ts' or model_type == 'ts_2':
             pickle.dump(model, open(f'{model_path}/{model.name}_{feature_type}_{n_feature}_outer_fold_{outer}', 'wb')) # save the model
 
+
                   
 """
 normalizes output of the model using a softmax function

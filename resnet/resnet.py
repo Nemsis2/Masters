@@ -292,7 +292,7 @@ class ResNet_4layer(nn.Module):
         super(ResNet_4layer, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
-                        nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),
+                        nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3),
                         nn.BatchNorm2d(64),
                         nn.ReLU())
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
@@ -300,7 +300,7 @@ class ResNet_4layer(nn.Module):
         self.layer1 = self._make_layer(block, 128, layers[1], stride = 2)
         self.layer2 = self._make_layer(block, 256, layers[2], stride = 2)
         self.layer3 = self._make_layer(block, 512, layers[3], stride = 2)
-        self.avgpool = nn.AvgPool2d(kernel_size=7, stride=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(512, num_classes)
         
 
@@ -419,7 +419,7 @@ class ResNet_4layer_3deep(nn.Module):
         super(ResNet_4layer_3deep, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
-                        nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),
+                        nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3),
                         nn.BatchNorm2d(64),
                         nn.ReLU())
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
@@ -427,7 +427,7 @@ class ResNet_4layer_3deep(nn.Module):
         self.layer1 = self._make_layer(block, 128, layers[1], stride = 2)
         self.layer2 = self._make_layer(block, 256, layers[2], stride = 2)
         self.layer3 = self._make_layer(block, 512, layers[3], stride = 2)
-        self.avgpool = nn.AvgPool2d(7, stride=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(2048, num_classes)
         
 
@@ -543,13 +543,13 @@ class ResNet_2layer(nn.Module):
         super(ResNet_2layer, self).__init__()
         self.inplanes = 64
         self.conv1 = nn.Sequential(
-                        nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3),
+                        nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3),
                         nn.BatchNorm2d(64),
                         nn.ReLU())
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
         self.layer0 = self._make_layer(block, 64, layers[0], stride = 1)
         self.layer1 = self._make_layer(block, 128, layers[1], stride = 2)
-        self.avgpool = nn.AvgPool2d(kernel_size=28, stride=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         self.fc = nn.Linear(128, num_classes)
         
 

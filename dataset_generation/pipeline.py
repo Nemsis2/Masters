@@ -78,6 +78,7 @@ def melspecs(data, n_mels=128, n_fft=2048, hop_length=512):
         for c in data[p]:
             audio = data[p][c][0]
             sr = data[p][c][1]
+
             sample = melspec(audio, sr, n_mels, n_fft, hop_length).T
             data_cpy[p].append(sample)
     

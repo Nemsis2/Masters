@@ -27,16 +27,18 @@ reshape data to size 3 x 224 x 224
 """
 def reshape_data(data):
     # create the transform
-    transform_spectra = transforms.Compose([  transforms.Resize((224,224)),
+
+    transform_spectra = transforms.Compose([  transforms.Resize((data.shape[-1],224)),
                                             ])
     
     del_indx = []
     for i in range(len(data)):
-        if 224 > data[i].shape[0]:
-                # zero pad the data to be 224 x 180
-                data[i] = (np.pad(data[i], [(0,(224 - data[i].shape[0])), (0,0)], mode='constant', constant_values=0))
+        data[i] = np.transpose(data[i])
+        if 224 > data[i].shape[-1]:
+                # zero pad the data to be 180 x 224
+                data[i] = th.tensor((np.pad(data[i], [(0,0), (0,(224 - data[i].shape[-1]))], mode='constant', constant_values=0))).unsqueeze(0).unsqueeze(0)
                 # bilinear interpolate the data to be 224 x 224
-                data[i] = transform_spectra(th.tensor(data[i]).unsqueeze(0).repeat(3,1,1)).unsqueeze(0)
+                #data[i] = transform_spectra(th.tensor(data[i]).unsqueeze(0)).unsqueeze(0)
         else:
                 # for now just delete the data
                 del_indx.append(i)

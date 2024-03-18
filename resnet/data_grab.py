@@ -25,14 +25,16 @@ def extract_inner_fold_data(path, inner_fold):
     for inner_fold_key in data.keys():
         if inner_fold_key == ("fold_" + str(inner_fold)):
             # grab the training data
-            for i, t in zip( data[inner_fold_key]['train']['inps'], data[inner_fold_key]['train']['tgts']):
-                batch.append([i, t])
+            for i, t, p in zip( data[inner_fold_key]['train']['inps'], data[inner_fold_key]['train']['tgts'], data[inner_fold_key]['train']['p']):
+                batch.append([i, t, p])
 
     batch = np.array(batch, dtype=object)
     batch_data = batch[:,0] # get the data from the batch
     batch_labels = batch[:,1] # get the labels from the batch
+    batch_names = batch[:,2]
+    batch_names = np.array(sort_patient_id(batch_names))
 
-    return batch_data, batch_labels
+    return batch_data, batch_labels, batch_names
 
 
 """
