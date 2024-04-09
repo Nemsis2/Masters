@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
-from helper_scripts import sort_patient_id
+from helper_scripts import sort_patient_id, labels_per_frame, cough_labels_per_frame
+
 
 
 def normalize_mfcc(data):
@@ -85,7 +86,7 @@ def extract_outer_fold_data(path):
     batch_labels = batch[:,1] # get the labels from the batch
     batch_names = batch[:,2]
     batch_names = np.array(sort_patient_id(batch_names))
-    
+    data, labels
     return batch_data, batch_labels, batch_names
 
 
@@ -169,39 +170,68 @@ def extract_test_data(path):
 
 
 def load_inner_data(k_fold_path, feature_type, inner):
-      data, labels = extract_inner_fold_data(k_fold_path, inner)
+    data, labels = extract_inner_fold_data(k_fold_path, inner)
 
-      if feature_type=="mfcc":
-            data = normalize_mfcc(data)
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
 
-      data = np.array([np.mean(x, axis=0) for x in data])
+    data = np.array([np.mean(x, axis=0) for x in data])
 
-      #labels = labels_per_frame(data, labels)
-      #data = np.vstack(data)
+    return data, labels.astype("int")
 
-      return data, labels.astype("int")
+
+def load_inner_per_frame_data(k_fold_path, feature_type, inner):
+    data, labels = extract_inner_fold_data(k_fold_path, inner)
+
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    labels = labels_per_frame(data, labels)
+    data = np.vstack(data)
+
+    return data, labels.astype("int")
 
 
 def load_dev_data(k_fold_path, feature_type, inner):
-      data, labels, names = extract_dev_data(k_fold_path, inner)
+    data, labels, names = extract_dev_data(k_fold_path, inner)
 
-      if feature_type=="mfcc":
-            data = normalize_mfcc(data)
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
 
-      data = np.array([np.mean(x, axis=0) for x in data])
+    data = np.array([np.mean(x, axis=0) for x in data])
 
-      return data, labels.astype("int"), names
+    return data, labels.astype("int"), names
 
 
 def load_test_data(k_fold_path, feature_type):
-      data, labels, names = extract_test_data(k_fold_path)
-      #labels = labels_per_frame(data, labels)
-      #names = labels_per_frame(data, names) # misusing this function to keep num_names = num_labels
-      #X = np.vstack(data)
+    data, labels, names = extract_test_data(k_fold_path)
 
-      if feature_type=="mfcc":
-            data = normalize_mfcc(data)
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
 
-      data = np.array([np.mean(x, axis=0) for x in data])
+    data = np.array([np.mean(x, axis=0) for x in data])
 
-      return data, labels.astype("int"), names
+    return data, labels.astype("int"), names
+
+
+def load_test_per_frame_data(k_fold_path, feature_type):
+    data, labels, names = extract_test_data(k_fold_path)
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    cough_labels = cough_labels_per_frame(data)
+    labels = labels_per_frame(data, labels)
+    data = np.vstack(data)
+
+    return data, labels.astype("int"), names, cough_labels
+
+def load_test_per_frame_data_tbi2(k_fold_path, feature_type):
+    data, labels, names = extract_test_data(k_fold_path)
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    labels = labels_per_frame(data, labels)
+    names = labels_per_frame(data, names)
+    data = np.vstack(data)
+
+    return data, labels.astype("int"), names, 

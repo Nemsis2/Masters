@@ -27,6 +27,23 @@ def create_new_folder(folder_path):
       return new_name
 
 
+def labels_per_frame(data, labels):
+      per_frame_labels = []
+      for i in range(data.shape[0]):
+            for j in range(data[i].shape[0]):
+                  per_frame_labels.append(labels[i])
+      
+      return np.array(per_frame_labels)
+     
+
+def cough_labels_per_frame(data):
+      cough_labels = []
+      for cough in range(data.shape[0]):
+            for frame in range(data[cough].shape[0]):
+                  cough_labels.append(cough)
+      
+      return cough_labels
+
 """
 sort the patient ids such that each is unqiue
 """

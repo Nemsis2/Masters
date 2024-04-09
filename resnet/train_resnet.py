@@ -149,14 +149,14 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            #create_inner_resnet(feature_type, n_feature, 'dev')
+            create_inner_resnet(feature_type, n_feature, 'dev')
             #create_ts_resnet(feature_type, n_feature, 'ts')
 
-            for fraction_of_feature in [0.1, 0.2, 0.5]:
-                if feature_type == 'mfcc':
-                    create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), 'fss')
-                else:
-                    create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), 'fss')
+            #for fraction_of_feature in [0.1, 0.2, 0.5]:
+            #    if feature_type == 'mfcc':
+            #       create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), 'fss')
+            #    else:
+            #        create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), 'fss')
     
             
 

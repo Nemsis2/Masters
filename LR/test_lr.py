@@ -222,49 +222,157 @@ def test_lr_fss(feature_type, n_feature, threshold, fss_features):
     return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
 
 
+def test_lr_tb_index(feature_type, n_feature, threshold):
+    """
+    Description:
+    ---------
+    Calculates the auc, sens and spec for a LR model on the given features.
+    
+    Inputs:
+    ---------
+    feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
+
+    n_feature: (int) number of features.
+
+    threshold: (float) decision threshold calculated on the development set.
+
+    Outputs:
+    --------
+    auc: average auc over all outer folds.
+
+    sens: average sensitivity over all outer folds.
+
+    spec: average specificity over all outer folds.
+    """
+
+    auc, sens, spec = 0, 0, 0
+    for outer in range(NUM_OUTER_FOLDS):
+        # grab all models to be tested for that outer fold
+        models = []
+
+        for inner in range(NUM_INNER_FOLDS):
+            # get the testing models
+            model_path = f'../../models/tb/lr_per_frame/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            models.append(pickle.load(open(model_path, 'rb'))) # load in the model
+
+        # grab the testing data
+        k_fold_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl' 
+        data, labels, names, cough_labels = load_test_per_frame_data(k_fold_path, feature_type)
+
+        results = []
+        for model in models:
+            results.append(model.predict_proba(data)) # do a forward pass through the models
+
+        # calculate tbi1
+        # get the average prediction per cough
+        cough_averages = []
+        for i in range(len(results)):
+            unq,ids,count = np.unique(cough_labels,return_inverse=True,return_counts=True)
+            out = np.column_stack((unq, np.bincount(ids,results[i][:,1])/count, np.bincount(ids,labels)/count))
+            cough_averages.append(out[:,1])
+            new_labels = out[:,2]
+
+        # get average cough prediction per model and use threshold to get binary predictions
+        cough_averages = sum(cough_averages)/4
+        #cough_averages = (np.array(cough_averages)>threshold[outer]).astype(np.int8)
+        cough_averages = (np.array(cough_averages)>0.50000000).astype(np.int8)
+
+        # get the average prediction per patient
+        unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+        out = np.column_stack((unq,np.bincount(ids,cough_averages)/count, np.bincount(ids,new_labels)/count))
+
+        tbi1 = out[:,1]
+        new_labels = out[:,2]
+
+
+        # calculate tbi2
+
+        # get the average prediction per patient over all frames and models
+        data, labels, names = load_test_per_frame_data_tbi2(k_fold_path, feature_type)
+        results = []
+        for model in models:
+            results.append(model.predict_proba(data)) # do a forward pass through the models
+        
+        tbi2 = []
+        for i in range(len(results)):
+            new_results, new_labels = gather_results(results[i], labels, names)
+            tbi2.append(new_results)
+        tbi2 = sum(tbi2)/4
+        # results
+
+        #if tbi1 > 0.5 or if tbi2 > threshold predict the patient as positive
+        inner_auc = roc_auc_score(new_labels, tbi1)
+        print(inner_auc)
+        tbi1 = (np.array(tbi1)>0.50000000).astype(np.int8)
+        tbi2 = (np.array(tbi2)>0.50000000).astype(np.int8)
+        print(f'tbi1 {tbi1}')
+        print(f'tbi2 {tbi2}')
+        print(f'labl {new_labels.astype(np.int8)}')
+
+        inner_sens, inner_spec = calculate_sens_spec(new_labels, tbi1)
+        
+        # add to the total auc, sens and spec
+        auc += inner_auc
+        sens += inner_sens
+        spec += inner_spec
+
+    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+
+
 
 def main():
-    for feature_type in ['mfcc', 'melspec', 'lfb']:
-        if feature_type == 'mfcc':
-            features = [13, 26, 39]
-        elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180]
+    #for feature_type in ['mfcc', 'melspec', 'lfb']:
+    #    if feature_type == 'mfcc':
+    #        features = [13, 26, 39]
+    #    elif feature_type == 'melspec' or feature_type == 'lfb':
+    #        features = [80, 128, 180]
         
-        for n_feature in features:
+    #    for n_feature in features:
+    feature_type = 'melspec'
+    n_feature  = 180
             # get the optimal threshold based off the EER
-            threshold = get_decision_threshold(feature_type, n_feature, NUM_OUTER_FOLDS, NUM_INNER_FOLDS)
+    threshold = get_decision_threshold(feature_type, n_feature, NUM_OUTER_FOLDS, NUM_INNER_FOLDS)
 
-            # test the em setup
-            auc, sens, spec = test_lr(feature_type, n_feature, threshold)
+    """
+    # test the em setup
+    auc, sens, spec = test_lr(feature_type, n_feature, threshold)
 
-            print(f'AUC for em {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for em {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for em {n_feature}_{feature_type}: {spec}')
+    print(f'AUC for em {n_feature}_{feature_type}: {auc}')
+    print(f'Sens for em {n_feature}_{feature_type}: {sens}')
+    print(f'Spec for em {n_feature}_{feature_type}: {spec}')
 
-            """
-            # test the sm setup
-            auc, sens, spec = test_lr_sm(feature_type, n_feature, threshold)
+    """
 
-            print(f'AUC for sm {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for sm {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for sm {n_feature}_{feature_type}: {spec}')
-            """
-            
+            # test the tb_index setup
+    auc, sens, spec = test_lr_tb_index(feature_type, n_feature, threshold)
 
-            """
-            for fraction_of_feature in [0.1, 0.2, 0.5]:
-                if feature_type == 'mfcc':
-                    auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature*3))
-                else:
-                    auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature))
-            
-                print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {auc}')
-                print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {sens}')
-                print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {spec}')
-            """
-               
+    print(f'AUC for tb_index {n_feature}_{feature_type}: {auc}')
+    print(f'Sens for tb_index {n_feature}_{feature_type}: {sens}')
+    print(f'Spec for tb_index {n_feature}_{feature_type}: {spec}')
 
-    auc = test_lr_multi_feature()
+    """
+    # test the sm setup
+    auc, sens, spec = test_lr_sm(feature_type, n_feature, threshold)
+
+    print(f'AUC for sm {n_feature}_{feature_type}: {auc}')
+    print(f'Sens for sm {n_feature}_{feature_type}: {sens}')
+    print(f'Spec for sm {n_feature}_{feature_type}: {spec}')
+    
+    
+
+    
+    for fraction_of_feature in [0.1, 0.2, 0.5]:
+        if feature_type == 'mfcc':
+            auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature*3))
+        else:
+            auc, sens, spec = test_lr_fss(feature_type, n_feature, threshold, int(n_feature*fraction_of_feature))
+    
+        print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {auc}')
+        print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {sens}')
+        print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {spec}')
+    """                  
+
+    #auc = test_lr_multi_feature()
 
     print(f'AUC for multi feature: {auc}')
 

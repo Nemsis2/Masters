@@ -2,13 +2,11 @@
 import torch as th
 import torch.nn.functional as F
 import torch.optim as optim
-import gc
 
 # custom scripts
 from helper_scripts import *
 from data_grab import *
 from data_preprocessing import *
-from sklearn.metrics import roc_auc_score
 from resnet import *
 
 # set the device
@@ -18,9 +16,6 @@ if device != "cuda":
     print("exiting since cuda not enabled")
     exit(1)
 
-# choose which melspec we will be working on
-MELSPEC = "180_melspec_fold_"
-MODEL_MELSPEC = "melspec_180"
 
 
 class Resnet18():

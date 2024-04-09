@@ -358,7 +358,6 @@ class ResNet_4layer(nn.Module):
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
-
         out = self.avgpool(out)
         out = out.view(out.size(0), -1)
         out = self.fc(out)

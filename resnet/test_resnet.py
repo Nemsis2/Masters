@@ -278,8 +278,8 @@ def main():
             best_em ,best_sm, best_ts = [], [], []
             for n_feature in features:
                 threshold = get_resnet_threshold(model, feature_type, n_feature)
-                #auc, sens, spec = test_em_resnet(feature_type, n_feature, model, threshold)
-                #best_em.append([auc, sens, spec])
+                auc, sens, spec = test_em_resnet(feature_type, n_feature, model, threshold)
+                best_em.append([auc, sens, spec])
 
                 #auc, sens, spec = test_sm_resnet(feature_type, n_feature, model, threshold)
                 #best_sm.append([auc, sens, spec])
@@ -287,19 +287,19 @@ def main():
                 #auc, sens, spec = test_ts_resnet(feature_type, n_feature, model, threshold)
                 #best_ts.append([auc, sens, spec])
 
-                best_fss = []
-                for fraction_of_feature in [0.1, 0.2, 0.5]:
-                    if feature_type == 'mfcc':
-                        auc, sens, spec = test_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), model, threshold)
-                        best_fss.append([auc, int(fraction_of_feature*n_feature*3),sens, spec,])
-                    else:
-                        auc, sens, spec = test_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), model, threshold)
-                        best_fss.append([auc, int(fraction_of_feature*n_feature),sens, spec,])
+                #best_fss = []
+                #for fraction_of_feature in [0.1, 0.2, 0.5]:
+                #    if feature_type == 'mfcc':
+                #        auc, sens, spec = test_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), model, threshold)
+                #        best_fss.append([auc, int(fraction_of_feature*n_feature*3),sens, spec,])
+                #    else:
+                #        auc, sens, spec = test_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), model, threshold)
+                #        best_fss.append([auc, int(fraction_of_feature*n_feature),sens, spec,])
 
             print(f'Results for {model} using {feature_type}s:')
-            #em_index = np.argmax(best_em,0)[0]
-            #print(f'EM: best_#_features: {features[em_index]}, AUC: {round(best_em[em_index][0],4)}, Spec: {round(best_em[em_index][1],4)}, Sens: {round(best_em[em_index][2],4)}')
-            #print(f'{features[em_index]} & {round(best_em[em_index][0],4)} & {round(best_em[em_index][1],4)} & {round(best_em[em_index][2],4)}')
+            em_index = np.argmax(best_em,0)[0]
+            print(f'EM: best_#_features: {features[em_index]}, AUC: {round(best_em[em_index][0],4)}, Spec: {round(best_em[em_index][1],4)}, Sens: {round(best_em[em_index][2],4)}')
+            print(f'{features[em_index]} & {round(best_em[em_index][0],4)} & {round(best_em[em_index][1],4)} & {round(best_em[em_index][2],4)}')
 
             #sm_index = np.argmax(best_sm,0)[0]
             #print(f'SM: best_#_features: {features[sm_index]}, AUC: {round(best_sm[sm_index][0],4)}, Spec: {round(best_sm[sm_index][1],4)}, Sens: {round(best_sm[sm_index][2],4)}')
@@ -309,8 +309,8 @@ def main():
             #print(f'TS: best_#_features: {features[ts_index]}, AUC: {round(best_ts[ts_index][0],4)}, Spec: {round(best_ts[ts_index][1],4)}, Sens: {round(best_ts[ts_index][2],4)}')
             #print(f'{features[ts_index]} & {round(best_ts[ts_index][0],4)} & {round(best_ts[ts_index][1],4)} & {round(best_ts[ts_index][2],4)}')
 
-            fss_index = np.argmax(best_fss,0)[0]
-            print(f'FSS: AUC: {round(best_fss[fss_index][0],4)}, features {best_fss[fss_index][1]}, Spec: {round(best_fss[fss_index][2],4)}, Sens: {round(best_fss[fss_index][3],4)}')
+            #fss_index = np.argmax(best_fss,0)[0]
+            #print(f'FSS: AUC: {round(best_fss[fss_index][0],4)}, features {best_fss[fss_index][1]}, Spec: {round(best_fss[fss_index][2],4)}, Sens: {round(best_fss[fss_index][3],4)}')
 
 if __name__ == "__main__":
     main()
