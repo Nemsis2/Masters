@@ -14,47 +14,43 @@ from get_best_features import *
 # set the device
 device = "cuda" if th.cuda.is_available() else "cpu"
 
-# choose which melspec we will be working on
-MELSPEC = "180_melspec_fold_"
-MODEL_MELSPEC = "melspec_180"
-
 
 """
 Create a bi_lstm model
 """
 class bi_lstm(nn.Module):
-    def __init__(self, input_dim, hidden_dim, layers):
-        super(bi_lstm, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.layers = layers        
-        if layers < 1:
-            self.bi_lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=layers, batch_first=True, dropout=0.5, bidirectional=True)
-        else:
-            self.bi_lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=layers, batch_first=True, bidirectional=True)
+      def __init__(self, input_dim, hidden_dim, layers):
+            super(bi_lstm, self).__init__()
+            self.hidden_dim = hidden_dim
+            self.layers = layers        
+            if layers < 1:
+                  self.bi_lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=layers, batch_first=True, dropout=0.5, bidirectional=True)
+            else:
+                  self.bi_lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=layers, batch_first=True, bidirectional=True)
 
-        self.drop1 = nn.Dropout(p=0.5)
-        self.batchnorm = nn.BatchNorm1d(self.hidden_dim * 2)
-        self.fc1 = nn.Linear(hidden_dim*2, 32)
-        self.mish = nn.Mish()
-        self.fc2 = nn.Linear(32,2)
+            self.drop1 = nn.Dropout(p=0.5)
+            self.batchnorm = nn.BatchNorm1d(self.hidden_dim * 2)
+            self.fc1 = nn.Linear(hidden_dim*2, 32)
+            self.mish = nn.Mish()
+            self.fc2 = nn.Linear(32,2)
 
-    def forward(self, x, lengths):
-        total_length = x.shape[1]
-        x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
-        self.bi_lstm.flatten_parameters()
-        out, (h_n, c_n) = self.bi_lstm(x)
-        out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=total_length)
-        
-        out_forward = out[range(len(out)), (np.array(lengths) - 1), :self.hidden_dim]
-        out_reverse = out[range(len(out)), 0, self.hidden_dim:]
-        out_reduced = th.cat((out_forward, out_reverse), dim=1)
-        
-        result = self.drop1(out_reduced)
-        result = self.batchnorm(result)
-        result = self.fc1(result)
-        result = self.mish(result)
-        result = self.fc2(result)
-        return result 
+      def forward(self, x, lengths):
+            total_length = x.shape[1]
+            x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+            self.bi_lstm.flatten_parameters()
+            out, (h_n, c_n) = self.bi_lstm(x)
+            out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True, total_length=total_length)
+            
+            out_forward = out[range(len(out)), (np.array(lengths) - 1), :self.hidden_dim]
+            out_reverse = out[range(len(out)), 0, self.hidden_dim:]
+            out_reduced = th.cat((out_forward, out_reverse), dim=1)
+            
+            result = self.drop1(out_reduced)
+            result = self.batchnorm(result)
+            result = self.fc1(result)
+            result = self.mish(result)
+            result = self.fc2(result)
+            return result 
 
 
 """
@@ -91,7 +87,6 @@ class bi_lstm_package():
 
             # run through all the epochs
             for epoch in range(self.epochs):
-                  print("epoch=", epoch)
                   train(data, labels, lengths, self)
 
             # collect the garbage
@@ -99,7 +94,7 @@ class bi_lstm_package():
             gc.collect()
 
       
-      def train_ts(self, models):
+      def train_exclusive_ts(self, models):
             data, labels = extract_outer_fold_data(self.k_fold_path)
 
             if self.feature_type=="mfcc":
@@ -117,7 +112,7 @@ class bi_lstm_package():
             gc.collect()
 
 
-      def train_ts_2(self, models):
+      def train_ts(self, models):
             data, labels = extract_outer_fold_data(self.k_fold_path)
 
             if self.feature_type=="mfcc":
@@ -146,9 +141,9 @@ class bi_lstm_package():
             # select only the relevant features
             feature_path = f'../../models/tb/lr/{self.feature_type}/{self.n_feature}_{self.feature_type}/fss/docs/'
             if self.feature_type == 'mfcc':
-                  selected_features = dataset_fss(self.n_feature*3, fss_feature, feature_path)
+                  selected_features = outer_fss(self.outer, self.n_feature*3, fss_feature, feature_path)
             else:
-                  selected_features = dataset_fss(self.n_feature, fss_feature, feature_path)
+                  selected_features = outer_fss(self.outer, self.n_feature, fss_feature, feature_path)
             
             print(selected_features)
             for batch in range(len(data)):
@@ -210,7 +205,7 @@ class bi_lstm_package():
             return threshold
 
 
-      def dev(self, return_threshold=False, return_auc=False):
+      def dev(self,):
             data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
 
             if self.feature_type=="mfcc":
@@ -229,14 +224,8 @@ class bi_lstm_package():
 
             results, labels = gather_results(results, labels, names)
             auc = roc_auc_score(labels, results)
-            threshold  = get_EER_threshold(labels, results)
-            
-            if return_threshold == True and return_auc == False:
-                  return threshold
-            elif return_auc == True and return_threshold == False:
-                  return auc
-            else:
-                  return threshold, auc
+
+            return auc
 
       def test(self):
             # read in the test set
@@ -432,44 +421,6 @@ def train_ts_2(x, y, model, inner_models, lengths, criterion_kl):
             model.scheduler.step() # update the scheduler
 
 
-
-
-"""
-train a model on a specific inner fold within an outer fold.
-"""
-def train_model_on_features(train_outer_fold, train_inner_fold, model, working_folder, epochs, batch_size, interpolate, num_features, model_path):
-      if train_inner_fold == None:
-            data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
-      else:
-            data, labels = extract_outer_fold_data(K_FOLD_PATH + MELSPEC, train_outer_fold)
-
-      features = dataset_fss(num_features)
-
-      for i in range(len(data)):
-            chosen_features = []
-            for feature in features:
-                chosen_features.append(np.asarray(data[i][:,feature]))
-            data[i] = th.as_tensor(np.stack(chosen_features, -1))
-
-      data, labels, lengths = create_batches(data, labels, interpolate, batch_size)
-      
-      # run through all the epochs
-      for epoch in range(epochs):
-            print("epoch=", epoch)
-            train(data, labels, lengths, model)
-
-      # collect the garbage
-      del data, labels, lengths
-      gc.collect()
-
-      save_model(model, working_folder, train_outer_fold, train_inner_fold, epochs, model_path, MODEL_MELSPEC)
-
-
-
-
-
-
-
 #############################################################
 #                                                           #
 #                                                           #
@@ -496,54 +447,6 @@ def get_predictions(x_batch, model, lengths):
       with th.no_grad():
             results = (to_softmax((model((x_batch).to(device), lengths)).cpu()))
       return results
-
-
-
-
-
-
-#############################################################
-#                                                           #
-#                                                           #
-#                    Validation Functions                   #
-#                                                           #
-#                                                           #
-#############################################################
-
-
-"""
-validates a model by testing its performance by assessing patients on the corresponding validation fold.
-"""
-def validate_model_patients(model, train_outer_fold, train_inner_fold, interpolate, batch_size):
-      data, labels, names = extract_dev_data(K_FOLD_PATH + MELSPEC, train_outer_fold, train_inner_fold)
-
-      # preprocess data and get batches
-      data, labels, names, lengths = create_test_batches(data, labels, names, interpolate, batch_size)
-      
-      # test model
-      results = test(data, model, lengths)
-      results = np.vstack(results)
-      labels = np.vstack(labels)
-
-      # get the patient predictions
-      unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
-      out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
-      results = out[:,1]
-      labels = out[:,2]
-
-      # get auc and threshold
-      threshold = get_EER_threshold(labels, results)
-      auc = roc_auc_score(labels, results)
-      results = (np.array(results)>threshold).astype(np.int8)
-      sens, spec = calculate_sens_spec(labels, results)
-
-      del data, labels, names, lengths, results
-      gc.collect()
-
-      return auc, sens, spec, threshold
-
-
-
 
 
 

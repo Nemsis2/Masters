@@ -2,7 +2,7 @@ import numpy as np
 import librosa
 import matplotlib.pyplot as plt
 
-x = np.arange(-10, 10, 0.25)
+x = np.arange(-2, 5.25, 0.25)
 
 y = []
 for j in range(len(x)):

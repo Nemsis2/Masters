@@ -198,17 +198,22 @@ def get_EER_threshold(y, results):
 
 
 
-def get_oracle_thresholds(results, labels, threshold):
+def get_oracle_thresholds(labels, results):
+      fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
+      tpr = np.delete(tpr,0)
+      fpr = np.delete(fpr,0)
+      threshold = np.delete(threshold,0)
+      
       sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
       for i in range(len(threshold)):
             thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
             sens, spec = calculate_sens_spec(labels, thresholded_results)
             sens_threshold[i] = np.abs(sens-0.9)
             spec_threshold[i] = np.abs(spec-0.7)
-
+    
       sens = np.nanargmin(sens_threshold)
       spec = np.nanargmin(spec_threshold)
-
+      
       return threshold[sens], threshold[spec]
 
 def gather_results(results, labels, names):
@@ -234,3 +239,26 @@ def gather_results(results, labels, names):
       unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
       out = np.column_stack((unq,np.bincount(ids,results[:,0])/count, np.bincount(ids,labels[:,0])/count))
       return out[:,1], out[:,2]
+
+
+def calculate_metrics(labels, results):
+      auc = roc_auc_score(labels, results)
+        
+      # get eer, and oracle thresholds
+      eer_threshold = get_EER_threshold(labels, results)
+      sens_threshold, spec_threshold = get_oracle_thresholds(labels, results)
+
+      # eer sens and spec
+      eer_results = (np.array(results)>eer_threshold).astype(np.int8)
+      inner_eer_sens, inner_eer_spec = calculate_sens_spec(labels, eer_results)
+
+      # oracle sens and spec
+      # using locked sens = 0.9
+      sens_results = (np.array(results)>sens_threshold).astype(np.int8)
+      _, inner_oracle_spec = calculate_sens_spec(labels, sens_results)
+
+      # using locked spec = 0.7
+      spec_results = (np.array(results)>spec_threshold).astype(np.int8)
+      inner_oracle_sens, _ = calculate_sens_spec(labels, spec_results)
+
+      return auc, inner_eer_sens, inner_eer_spec, inner_oracle_sens, inner_oracle_spec

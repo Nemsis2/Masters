@@ -2,6 +2,7 @@
 import torch as th
 import os
 import pickle
+from imblearn.over_sampling import SMOTE
 
 # custom scripts
 from helper_scripts import *
@@ -61,6 +62,80 @@ def create_inner_lr(feature_type, n_feature, model_type='dev'):
         print(f'Models already exist for type:{model_type}_{n_feature}_{feature_type}. Skipping...')
 
 
+def create_inner_SMOTE_lr(feature_type, n_feature, model_type='dev'):
+    """
+    Description:
+    ---------
+    Trains models for the outer and inner folds. Skips a folder if it contains anything.
+
+    Inputs:
+    ---------
+    feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
+
+    n_feature: (int) number of features.
+
+    model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
+    
+    """
+    model_path = f'../../models/tb/SMOTE_lr/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
+    
+    if len(os.listdir(model_path)) == 0: # if the folder is empty
+        print(f'Creating {model_type} models for {n_feature}_{feature_type}')
+
+        for outer in range(NUM_OUTER_FOLDS):
+            print("Outer fold=", outer)
+            
+            for inner in range(NUM_INNER_FOLDS):
+                print("Inner fold=", inner)
+
+                k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+                data, labels = load_inner_data(k_fold_path, feature_type, inner)
+                print(f'pre SMOTE{data.shape}')
+                print(f'pre SMOTE labels {sum(labels)/len(labels)}')
+                sm = SMOTE(random_state=42)
+                data, labels = sm.fit_resample(data, labels)
+                print(f'post SMOTE{data.shape}')
+                print(f'post SMOTE labels {sum(labels)/len(labels)}')
+                model, params = grid_search_lr(data, labels)
+                pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+    
+    else:
+        print(f'Models already exist for type:{model_type}_{n_feature}_{feature_type}. Skipping...')
+
+
+def create_inner_frame_skip_lr(feature_type, n_feature, model_type='dev'):
+    """
+    Description:
+    ---------
+    Trains models for the outer and inner folds. Skips a folder if it contains anything.
+
+    Inputs:
+    ---------
+    feature_type: (string) type of the feature to be extracted. (mfcc, lfb or melspec)
+
+    n_feature: (int) number of features.
+
+    model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
+    
+    """
+    model_path = f'../../models/tb/lr_frame_skip/{feature_type}/{n_feature}_{feature_type}/{model_type}/'
+    
+    if len(os.listdir(model_path)) == 0: # if the folder is empty
+        print(f'Creating {model_type} models for {n_feature}_{feature_type}')
+
+        for outer in range(NUM_OUTER_FOLDS):
+            print("Outer fold=", outer)
+            
+            for inner in range(NUM_INNER_FOLDS):
+                print("Inner fold=", inner)
+
+                k_fold_path = f'../../data/tb/frame_skip/{n_feature}_{feature_type}_fold_{outer}.pkl'
+                data, labels = load_inner_data(k_fold_path, feature_type, inner)
+
+                model, params = grid_search_lr(data, labels)
+                pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+
+
 def create_fss_lr(feature_type, n_feature, fss_feature):
     """
     Description:
@@ -76,16 +151,16 @@ def create_fss_lr(feature_type, n_feature, fss_feature):
     """
     # set the model path
     model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
-    
-    # select only the relevant features
-    feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
-    if feature_type == 'mfcc':
-        selected_features = dataset_fss(n_feature*3, fss_feature, feature_path)
-    else:
-        selected_features = dataset_fss(n_feature, fss_feature, feature_path)
 
     for outer in range(NUM_OUTER_FOLDS):
         print("Outer fold=", outer)
+
+        # select only the relevant features
+        feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+        if feature_type == 'mfcc':
+            selected_features = outer_fss(outer, n_feature*3, fss_feature, feature_path)
+        else:
+            selected_features = outer_fss(outer, n_feature, fss_feature, feature_path)
         
         for inner in range(NUM_INNER_FOLDS):
             print("Inner fold=", inner)
@@ -101,7 +176,6 @@ def create_fss_lr(feature_type, n_feature, fss_feature):
 
             model, params = grid_search_lr(chosen_features, labels)
             pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
-
 
 
 def create_inner_per_frame_lr(feature_type, n_feature):
@@ -121,23 +195,22 @@ def create_inner_per_frame_lr(feature_type, n_feature):
     """
     model_path = f'../../models/tb/lr_per_frame/{feature_type}/{n_feature}_{feature_type}/dev/'
     
-    if len(os.listdir(model_path)) == 0: # if the folder is empty
-        print(f'Creating per_frame dev models for {n_feature}_{feature_type}')
+    #if len(os.listdir(model_path)) == 0: # if the folder is empty
+    print(f'Creating per_frame dev models for {n_feature}_{feature_type}')
 
-        for outer in range(NUM_OUTER_FOLDS):
-            print("Outer fold=", outer)
-            
-            for inner in range(NUM_INNER_FOLDS):
-                print("Inner fold=", inner)
+    for outer in range(NUM_OUTER_FOLDS):
+        print("Outer fold=", outer)
 
-                k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-                data, labels = load_inner_per_frame_data(k_fold_path, feature_type, inner)
+        for inner in range(NUM_INNER_FOLDS):
+            print("Inner fold=", inner)
 
-                model, params = grid_search_lr(data, labels)
-                pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+            k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
+            data, labels = load_inner_per_frame_data(k_fold_path, feature_type, inner)
 
-    else:
-        print(f'models already exist for {feature_type}_{n_feature} skipping to next...')
+            model, params = grid_search_lr(data, labels)
+                #pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+    #else:
+     #   print(f'models already exist for {feature_type}_{n_feature} skipping to next...')
 
 
 def main():
@@ -150,18 +223,18 @@ def main():
         
         for n_feature in features:
             #create_inner_lr(feature_type, n_feature,'dev')
-            create_inner_per_frame_lr(feature_type, n_feature)
+            #create_inner_SMOTE_lr(feature_type, n_feature,'dev')
+            #create_inner_per_frame_lr(feature_type, n_feature)
+            #create_inner_frame_skip_lr(feature_type, n_feature,'dev')
             
-            """
             for fraction_of_feature in [0.1, 0.2, 0.5]:
                 
                 if feature_type == 'mfcc':
                     create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
-                    create_inner_per_frame_lr(feature_type, n_feature)
                 else:
                     create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature))
-            """
             
+
 
 if __name__ == "__main__":
     main()

@@ -20,6 +20,26 @@ if device != "cuda":
       exit(1)
 
 
+def post_results(feature_type, n_feature, performance_metrics):
+    print(f'AUC for em {n_feature}_{feature_type}: {performance_metrics[0]}')
+    print(f'Sens for em {n_feature}_{feature_type}: {performance_metrics[1]}')
+    print(f'Spec for em {n_feature}_{feature_type}: {performance_metrics[2]}')
+    print(f'Oracle sens for em {n_feature}_{feature_type}: {performance_metrics[3]}')
+    print(f'Oracle spec for em {n_feature}_{feature_type}: {performance_metrics[4]}')
+    print(f'{feature_type} & {round(n_feature,4)} & {round(performance_metrics[0],4)} & {round(performance_metrics[1],4)} & {round(performance_metrics[2],4)} & {round(performance_metrics[3],4)} & {round(performance_metrics[4],4)}')
+
+
+
+def post_fss_results(feature_type, n_feature, fraction_of_feature, performance_metrics):
+    print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {performance_metrics[0]}')
+    print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {performance_metrics[1]}')
+    print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {performance_metrics[2]}')
+    print(f'Oracle sens for frame_skip fss {n_feature}_{feature_type}: {performance_metrics[3]}')
+    print(f'Oracle spec for frame_skip fss {n_feature}_{feature_type}: {performance_metrics[4]}')
+    print(f'{feature_type} & {round(n_feature,4)} & {round(performance_metrics[0],4)} & {round(performance_metrics[1],4)} & {round(performance_metrics[2],4)} & {round(performance_metrics[3],4)} & {round(performance_metrics[4],4)}')
+
+
+
 def test_em_lstm(feature_type, n_feature):
     """
     Description:
@@ -32,30 +52,26 @@ def test_em_lstm(feature_type, n_feature):
     --------
 
     """
-    auc, sens, spec = 0, 0, 0
+    performance_metrics = np.zeros(5)
     for outer in range(NUM_OUTER_FOLDS):
 
         outer_results = []
-        threshold = 0
         for inner in range(NUM_INNER_FOLDS):
             # get the dev model
             model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            threshold += model.dev(return_threshold=True) # get the decision threshold for this inner fold
             results, labels, names = model.test() # do a forward pass through the models
             results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
             outer_results.append(results)
 
         # get auc
         results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
-        auc += roc_auc_score(labels, results)
 
-        # use threshold and get sens and spec
-        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
-        sens_, spec_ = calculate_sens_spec(labels, results)
-        sens += sens_
-        spec += spec_
+        performance_metrics += calculate_metrics(labels, results)
 
-    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
+
+    return performance_metrics
+
 
 
 def test_sm_lstm(feature_type, n_feature):
@@ -70,7 +86,8 @@ def test_sm_lstm(feature_type, n_feature):
     --------
 
     """
-    auc, sens, spec = 0, 0, 0
+    performance_metrics = np.zeros(5)
+    auc = 0
     for outer in range(NUM_OUTER_FOLDS):
         # find best performing inner for this outer
         best_auc = 0
@@ -83,20 +100,52 @@ def test_sm_lstm(feature_type, n_feature):
                 best_inner = inner
         
         model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{best_inner}')
-        threshold = model.dev(return_threshold=True)
+        
+        # get results gather by patient and calculate auc
+        results, labels, names = model.test() # do a forward pass through the models
+        results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
+        performance_metrics += calculate_metrics(labels, results)
+
+    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
+
+    return performance_metrics
+
+
+
+
+def test_exclusive_ts_lstm(feature_type, n_feature):
+    """
+    Description:
+    ---------
+    
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    performance_metrics = np.zeros(5)
+    for outer in range(NUM_OUTER_FOLDS):  
+        # get the threshold from the dev set
+        threshold = 0
+        for inner in range(NUM_INNER_FOLDS):
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+            threshold += model.dev(return_threshold=True)
+        
+        # load in and test ts model
+        model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts/lstm_{feature_type}_{n_feature}_outer_fold_{outer}')
         results, labels, names = model.test() # do a forward pass through the models
         
-        # get auc
-        results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
-        auc += roc_auc_score(labels, results)
+        # get results gather by patient and calculate auc
+        results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
+        performance_metrics += calculate_metrics(labels, results)
 
-        # use threshold and get sens and spec
-        results = (np.array(results)>(threshold)).astype(np.int8)
-        sens_, spec_ = calculate_sens_spec(labels, results)
-        sens += sens_
-        spec += spec_
+    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
 
-    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+    return performance_metrics
+
+
 
 
 def test_ts_lstm(feature_type, n_feature):
@@ -111,51 +160,8 @@ def test_ts_lstm(feature_type, n_feature):
     --------
 
     """
-    auc, sens, spec = 0, 0, 0
-    for outer in range(NUM_OUTER_FOLDS):  
-        # get the threshold from the dev set
-        threshold = 0
-        for inner in range(NUM_INNER_FOLDS):
-            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            threshold += model.dev(return_threshold=True)
-        
-        # load in and test ts model
-        model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts/lstm_{feature_type}_{n_feature}_outer_fold_{outer}')
-        results, labels, names = model.test() # do a forward pass through the models
-        
-        # get auc
-        results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
-        auc += roc_auc_score(labels, results)
-
-        # use threshold and get sens and spec
-        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
-        sens_, spec_ = calculate_sens_spec(labels, results)
-        sens += sens_
-        spec += spec_
-
-    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
-
-
-def test_ts_lstm_2(feature_type, n_feature):
-    """
-    Description:
-    ---------
-    
-    Inputs:
-    ---------
-
-    Outputs:
-    --------
-
-    """
-    auc, sens, spec = 0, 0, 0
-    for outer in range(NUM_OUTER_FOLDS):  
-        # get the threshold from the dev set
-        threshold = 0
-        for inner in range(NUM_INNER_FOLDS):
-            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            threshold += model.dev(return_threshold=True)
-        
+    performance_metrics = np.zeros(5)
+    for outer in range(NUM_OUTER_FOLDS):   
         # load in and test ts model
         model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts_2/lstm_{feature_type}_{n_feature}_outer_fold_{outer}')
         results, labels, names = model.test() # do a forward pass through the models
@@ -164,13 +170,15 @@ def test_ts_lstm_2(feature_type, n_feature):
         results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
         auc += roc_auc_score(labels, results)
 
-        # use threshold and get sens and spec
-        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
-        sens_, spec_ = calculate_sens_spec(labels, results)
-        sens += sens_
-        spec += spec_
+        # get results gather by patient and calculate auc
+        results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
+        performance_metrics += calculate_metrics(labels, results)
 
-    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
+
+    return performance_metrics
+
+
 
 
 def test_fss_lstm(feature_type, n_feature, fss_feature):
@@ -185,7 +193,7 @@ def test_fss_lstm(feature_type, n_feature, fss_feature):
     --------
 
     """
-    auc, sens, spec = 0, 0, 0
+    performance_metrics = np.zeros(5)
     for outer in range(NUM_OUTER_FOLDS):
 
         outer_results = []
@@ -198,18 +206,15 @@ def test_fss_lstm(feature_type, n_feature, fss_feature):
             results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
             outer_results.append(results)
 
-        # get auc
-        results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
-        auc += roc_auc_score(labels, results)
+        # get results gather by patient and calculate auc
+        results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
+        outer_results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
 
-        # use threshold and get sens and spec
-        results = (np.array(results)>(threshold/NUM_INNER_FOLDS)).astype(np.int8)
-        sens_, spec_ = calculate_sens_spec(labels, results)
-        sens += sens_
-        spec += spec_
+        performance_metrics += calculate_metrics(labels, outer_results)
 
-    return auc/NUM_OUTER_FOLDS, sens/NUM_OUTER_FOLDS, spec/NUM_OUTER_FOLDS
+    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
 
+    return performance_metrics
 
 
 
@@ -221,60 +226,27 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            auc, sens, spec = test_em_lstm(feature_type, n_feature)
+            # test the em setup
+            performance_metrics = test_em_lstm(feature_type, n_feature)
+            post_results(feature_type, n_feature, performance_metrics)
 
-            print(f'AUC for em {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for em {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for em {n_feature}_{feature_type}: {spec}')
+            # test the sm setup
+            performance_metrics = test_sm_lstm(feature_type, n_feature)
+            post_results(feature_type, n_feature, performance_metrics)
 
-            auc, sens, spec = test_sm_lstm(feature_type, n_feature)
+            # test the ts setup
+            performance_metrics = test_ts_lstm(feature_type, n_feature)
+            post_results(feature_type, n_feature, performance_metrics)
 
-            print(f'AUC for sm {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for sm {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for sm {n_feature}_{feature_type}: {spec}')
-
-            auc, sens, spec = test_ts_lstm(feature_type, n_feature)
-
-            print(f'AUC for ts {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for ts {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for ts {n_feature}_{feature_type}: {spec}')
-
-            auc, sens, spec = test_ts_lstm_2(feature_type, n_feature)
-
-            print(f'AUC for ts_2 {n_feature}_{feature_type}: {auc}')
-            print(f'Sens for ts_2 {n_feature}_{feature_type}: {sens}')
-            print(f'Spec for ts_2 {n_feature}_{feature_type}: {spec}')
 
             for fraction_of_feature in [0.1, 0.2, 0.5]:
                 if feature_type == 'mfcc':
-                    auc, sens, spec = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
-                    print(f'AUC for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {auc}')
-                    print(f'Sens for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {sens}')
-                    print(f'Spec for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature*3)}: {spec}')
+                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                    post_fss_results(feature_type, n_feature, fraction_of_feature, performance_metrics)
                 else:
-                    auc, sens, spec = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature))
-                    print(f'AUC for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {auc}')
-                    print(f'Sens for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {sens}')
-                    print(f'Spec for fss {n_feature}_{feature_type}_fss_{int(fraction_of_feature*n_feature)}: {spec}')
+                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature))
+                    post_fss_results(feature_type, n_feature, fraction_of_feature, performance_metrics)
 
-    
+
 if __name__ == "__main__":
     main()
-
-
-
-"""
-def get_oracle_thresholds(results, labels, threshold):
-    sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
-    for i in range(len(threshold)):
-        thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
-        sens, spec = calculate_sens_spec(labels, thresholded_results)
-        sens_threshold[i] = np.abs(sens-0.9)
-        spec_threshold[i] = np.abs(spec-0.7)
-
-    print(sens_threshold)
-    sens = np.nanargmin(sens_threshold)
-    spec = np.nanargmin(spec_threshold)
-    print("sens", sens)
-    return threshold[sens], threshold[spec]
-"""

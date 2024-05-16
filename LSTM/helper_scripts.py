@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 import logging
 import pickle
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, roc_auc_score
 
 
 #https://discuss.pytorch.org/t/is-there-something-like-keras-utils-to-categorical-in-pytorch/5960
@@ -161,3 +161,26 @@ def load_model(model_path):
       model = pickle.load(open(model_path, 'rb')) # load in the model
       th.manual_seed(model.seed) # set the seed to be the same as the one the model was generated on
       return model
+
+
+def calculate_metrics(labels, results):
+      auc = roc_auc_score(labels, results)
+        
+      # get eer, and oracle thresholds
+      eer_threshold = get_EER_threshold(labels, results)
+      sens_threshold, spec_threshold = get_oracle_thresholds(labels, results)
+
+      # eer sens and spec
+      eer_results = (np.array(results)>eer_threshold).astype(np.int8)
+      inner_eer_sens, inner_eer_spec = calculate_sens_spec(labels, eer_results)
+
+      # oracle sens and spec
+      # using locked sens = 0.9
+      sens_results = (np.array(results)>sens_threshold).astype(np.int8)
+      _, inner_oracle_spec = calculate_sens_spec(labels, sens_results)
+
+      # using locked spec = 0.7
+      spec_results = (np.array(results)>spec_threshold).astype(np.int8)
+      inner_oracle_sens, _ = calculate_sens_spec(labels, spec_results)
+
+      return auc, inner_eer_sens, inner_eer_spec, inner_oracle_sens, inner_oracle_spec

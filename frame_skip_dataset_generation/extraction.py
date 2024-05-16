@@ -28,7 +28,7 @@ if __name__ == '__main__':
         for feature_type in ['melspec', 'lfb', 'mfcc']:
             # Train dataset
             # Remove test patients before preprocessing
-            path = f'/tardis_copies/masters/data/tb/combo/test_patients_fold_{i}.txt'
+            path = f'/tardis_copies/masters/data/tb/frame_skip/test_patients_fold_{i}.txt'
             test_patients = np.loadtxt(path, delimiter=',', dtype=str)
 
             c_data = copy.deepcopy(c_data_base)
@@ -58,18 +58,15 @@ if __name__ == '__main__':
                 elif feature_type == 'lfb':
                     fname = f'{n_lfb[j]}_{feature_type}_fold_{i}.pkl'
 
-                save_path = f'/tardis_copies/masters/data/tb/combo/new/'
+                save_path = f'/tardis_copies/masters/data/tb/frame_skip/'
                 with open(save_path+fname, 'wb') as handle:
                     pickle.dump(dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-                save_path = f'/tardis_copies/masters/data/tb/combo/new'
                 
                 with open(f'{save_path}splits_fold_{i}.pkl', 'wb') as handle:
                     pickle.dump(splits, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
                 # Test dataset
                 # Remove test patients before preprocessing
-                path = f'/tardis_copies/masters/data/tb/combo/test_patients_fold_{i}.txt'
                 test_patients = np.loadtxt(path, delimiter=',', dtype=str)
                 c_data_cpy = {}
                 r_data_cpy = {}
@@ -98,6 +95,6 @@ if __name__ == '__main__':
                 elif feature_type == 'lfb':
                     fname = f'test_dataset_{feature_type}_{n_lfb[j]}_fold_{i}.pkl'
 
-                save_path = f'/tardis_copies/masters/data/tb/combo/new/test/'
+                save_path = f'/tardis_copies/masters/data/tb/frame_skip/test/'
                 with open(save_path+fname, 'wb') as handle:
                     pickle.dump(test_dataset, handle, protocol=pickle.HIGHEST_PROTOCOL)

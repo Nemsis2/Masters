@@ -5,8 +5,8 @@ import numpy as np
 import pickle
 
 # custom scripts
-from data_grab import extract_dev_data, extract_outer_fold_data, normalize_mfcc
-from helper_scripts import get_EER_threshold
+from data_grab import extract_dev_data, load_dev_per_frame_data, normalize_mfcc
+from helper_scripts import get_EER_threshold, get_oracle_thresholds
 
 
 def grid_search_lr(X, y):
@@ -29,14 +29,14 @@ def grid_search_lr(X, y):
         best_clf.params: Optimal hyperparameters determined by the GridSearch
     """
     param_grid = {
-        'C':[10, 100, 1000],
+        'C':[0.001, 0.01, 0.1, 1, 10, 100, 1000],
         'l1_ratio':[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     }
-    model = LogisticRegression(C = 0.2782559402207126, 
-                                l1_ratio = 1, max_iter=1000000, 
-                                solver='saga', 
-                                penalty='elasticnet', 
-                                multi_class = 'multinomial', 
+    model = LogisticRegression(C = 0.2782559402207126,
+                                l1_ratio = 1, max_iter=1000000,
+                                solver='saga',
+                                penalty='elasticnet',
+                                multi_class = 'multinomial',
                                 n_jobs = -1,
                                 tol=0.0001)
     clf = GridSearchCV(model, param_grid=param_grid, cv=3, verbose=True, n_jobs=-1)
@@ -70,7 +70,53 @@ def gather_results(results, labels, names):
     return out[:,1], out[:,2]
 
 
-def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
+def get_decision_threshold(feature_type, n_feature, model_path, val_data):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+    feature_type: (string) The type of feature used to train the model (melspec, mfcc, lfb)
+
+    n_features: (int) The number of features corresponding to the feature type (eg. 180 melspec features or 39 mfccs)
+
+
+    Outputs:
+    --------
+    outer_threshold: (list) The average EER decision threshold over all inner models in each outer fold. Has length = num outer folds
+    """
+    outer_threshold, outer_sens_threshold, outer_spec_threshold = [], [], []
+    for outer in range(3): 
+        outer_avg_threshold, outer_avg_sens_threshold, outer_avg_spec_threshold = 0, 0, 0
+        for inner in range(4):
+            # grab the dev models
+            dev_model_path = f'{model_path}lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            dev_model = (pickle.load(open(dev_model_path, 'rb'))) # load in the model
+        
+            # grab the dev data
+            k_fold_path = f'{val_data}{n_feature}_{feature_type}_fold_{outer}.pkl'
+            data, labels, names = extract_dev_data(k_fold_path, inner)
+            if feature_type == 'mfcc':
+                data = normalize_mfcc(data)
+            X = np.array([np.mean(x, axis=0) for x in data])
+            labels = labels.astype("int")
+
+            # make predictions and calculate the threshold based off the EER
+            results, val_labels = gather_results(dev_model.predict_proba(X), labels, names) # do a forward pass through the model
+            outer_avg_threshold += get_EER_threshold(val_labels, results)
+            sens_threshold, spec_threshold = get_oracle_thresholds(val_labels, results)
+            outer_avg_sens_threshold += sens_threshold
+            outer_avg_spec_threshold += spec_threshold
+
+        outer_threshold.append(outer_avg_threshold/4)
+        outer_sens_threshold.append(outer_avg_sens_threshold/4)
+        outer_spec_threshold.append(outer_avg_spec_threshold/4)
+
+    return outer_threshold, outer_sens_threshold, outer_spec_threshold
+
+
+def get_per_frame_decision_threshold(feature_type, n_feature, n_outer, n_inner):
     """
     Description:
     ---------
@@ -89,28 +135,30 @@ def get_decision_threshold(feature_type, n_feature, n_outer, n_inner):
     --------
     outer_threshold: (list) The average EER decision threshold over all inner models in each outer fold. Has length = num outer folds
     """
-    outer_threshold = []
+    outer_threshold, outer_sens_threshold, outer_spec_threshold = [], [], []
     for outer in range(n_outer): 
-        outer_avg_threshold = 0
+        outer_avg_threshold, outer_avg_sens_threshold, outer_avg_spec_threshold = 0, 0, 0
         for inner in range(n_inner):
             # grab the dev models
-            dev_model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
+            dev_model_path = f'../../models/tb/lr_per_frame/{feature_type}/{n_feature}_{feature_type}/dev/lr_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'
             dev_model = (pickle.load(open(dev_model_path, 'rb'))) # load in the model
         
             # grab the dev data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-            data, labels, names = extract_dev_data(k_fold_path, inner)
-            if feature_type == 'mfcc':
-                data = normalize_mfcc(data)
-            X = np.array([np.mean(x, axis=0) for x in data])
-            labels = labels.astype("int")
+            data, labels, names, cough_labels = load_dev_per_frame_data(k_fold_path, feature_type, inner)
 
             # make predictions and calculate the threshold based off the EER
-            results, val_labels = gather_results(dev_model.predict_proba(X), labels, names) # do a forward pass through the model
+            results, val_labels = gather_results(dev_model.predict_proba(data), labels, cough_labels) # do a forward pass through the model
             outer_avg_threshold += get_EER_threshold(val_labels, results)
-        outer_threshold.append(outer_avg_threshold/n_inner)
+            sens_threshold, spec_threshold = get_oracle_thresholds(val_labels, results)
+            outer_avg_sens_threshold += sens_threshold
+            outer_avg_spec_threshold += spec_threshold
+        
+        outer_threshold.append(outer_avg_threshold/4)
+        outer_sens_threshold.append(outer_avg_sens_threshold/4)
+        outer_spec_threshold.append(outer_avg_spec_threshold/4)
 
-    return outer_threshold
+    return outer_threshold, outer_sens_threshold, outer_spec_threshold
 
 
 def labels_per_frame(data, labels):
@@ -130,3 +178,10 @@ def labels_per_frame(data, labels):
         for j in range(data[i].shape[0]):
             per_frame_label.append(labels[i])
     return np.array(per_frame_label)
+
+
+def tbi1(names, coughs, labels):
+    unq,ids,count = np.unique(names,return_inverse=True,return_counts=True)
+    out = np.column_stack((unq,np.bincount(ids,coughs)/count, np.bincount(ids,labels)/count))
+    
+    return out[:,1], out[:,2]

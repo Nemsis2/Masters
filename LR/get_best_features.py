@@ -81,7 +81,7 @@ def inner_fss(inner, outer, num_features):
 
 
 
-def outer_fss(outer, num_features):
+def outer_fss(outer, total_features, num_features, feature_path):
     """
     Uses previously generated SFS results to determine the highest "scoring" features
     as selected by 5 different models across an outer fold.
@@ -103,22 +103,19 @@ def outer_fss(outer, num_features):
         print("Outer fold", outer, "does not exist")
         return
 
-    #find files
-    folder_names = os.listdir(MODEL_PATH + "FSS/")
-    folder_names.sort()
-    fold_feature = np.zeros(180)
+
+    fold_feature = np.zeros(total_features)
     selected_features = []
 
-    for folder_name in folder_names:
-        for inner in range(4):
-            best_features = []
-            file_name = MODEL_PATH + "FSS/" + folder_name + "/features_outer_" + str(outer) + "_inner_" + str(inner) + ".txt"
-            with open(file_name, 'r') as f:
-                for line in f:
-                    best_features.append(line.split('\n')[0])
+    for inner in range(4):
+        best_features = []
+        file_name = f'{feature_path}features_outer_{outer}_inner_{inner}.txt'
+        with open(file_name, 'r') as f:
+            for line in f:
+                best_features.append(line.split('\n')[0])
 
-            for i in range(len(best_features)):
-                fold_feature[int(best_features[i])] += i
+        for i in range(len(best_features)):
+            fold_feature[int(best_features[i])] += i
 
     sorted_list = sorted(fold_feature)
 

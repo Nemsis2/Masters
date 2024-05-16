@@ -196,7 +196,12 @@ def get_EER_threshold(y, results):
       optimal_threshold = threshold[index]
       return optimal_threshold
 
-def get_oracle_thresholds(results, labels, threshold):
+def get_oracle_thresholds(labels, results):
+      fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
+      tpr = np.delete(tpr,0)
+      fpr = np.delete(fpr,0)
+      threshold = np.delete(threshold,0)
+      
       sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
       for i in range(len(threshold)):
             thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
@@ -206,7 +211,7 @@ def get_oracle_thresholds(results, labels, threshold):
     
       sens = np.nanargmin(sens_threshold)
       spec = np.nanargmin(spec_threshold)
-
+      
       return threshold[sens], threshold[spec]
 
 def load_model(model_path):

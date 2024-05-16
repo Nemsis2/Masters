@@ -188,7 +188,6 @@ def load_inner_per_frame_data(k_fold_path, feature_type, inner):
 
     labels = labels_per_frame(data, labels)
     data = np.vstack(data)
-
     return data, labels.astype("int")
 
 
@@ -203,6 +202,18 @@ def load_dev_data(k_fold_path, feature_type, inner):
     return data, labels.astype("int"), names
 
 
+def load_dev_per_frame_data(k_fold_path, feature_type, inner):
+    data, labels, names = extract_dev_data(k_fold_path, inner)
+    
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    cough_labels = cough_labels_per_frame(data)
+    labels = labels_per_frame(data, labels)
+    data = np.vstack(data)
+
+    return data, labels.astype("int"), names, cough_labels
+
 def load_test_data(k_fold_path, feature_type):
     data, labels, names = extract_test_data(k_fold_path)
 
@@ -216,6 +227,7 @@ def load_test_data(k_fold_path, feature_type):
 
 def load_test_per_frame_data(k_fold_path, feature_type):
     data, labels, names = extract_test_data(k_fold_path)
+    
     if feature_type=="mfcc":
         data = normalize_mfcc(data)
 

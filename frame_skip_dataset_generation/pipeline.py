@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 from sklearn.model_selection import StratifiedKFold
+import math
 
 noisy_ps = ['Wu0381', 'Wu0392', 'Wu0399', 'Wu0403', 'Wu0405', 'Wu0413',
            'Wu0414', 'Wu0417', 'Wu0430', 'Wu0450', 'Wu0471', 'Wu0488',
@@ -17,11 +18,12 @@ def normalize(mspec, min_log_value = -80):
 
 def melspec(audio, sr, n_mels, n_fft, hop_length):
 
+    overlap = (len(audio)/99)
     melspec_ = librosa.feature.melspectrogram(y=audio, 
                                     sr=sr, 
                                     n_mels=n_mels, 
                                     n_fft=n_fft, 
-                                    hop_length=hop_length)
+                                    hop_length=int(overlap))
     
     return normalize(librosa.power_to_db(melspec_, ref=np.max))
 
@@ -33,11 +35,12 @@ def downsample(data, sr=16000):
 
 def mfcc(audio, sr, n_mfcc, n_fft, hop_length):
 
+    overlap = (len(audio)/99)
     mfcc_ = librosa.feature.mfcc(y=audio, 
                                     sr=sr, 
                                     n_mfcc=n_mfcc, 
                                     n_fft=n_fft, 
-                                    hop_length=hop_length)
+                                    hop_length=int(overlap))
 
     if mfcc_.shape[-1] > 9:
         mfcc_delta = librosa.feature.delta(mfcc_)
@@ -118,16 +121,17 @@ def lfb_energies(data, n_bins=140, hop_length=512, n_fft=2048, sr=44100):
         for c in data[p]:
             audio = data[p][c][0]
             sr = data[p][c][1]
+
+            overlap = (len(audio)/99)
             S, n_fft = librosa.core.spectrum._spectrogram(
                 y=audio,
                 n_fft=n_fft,
-                hop_length=hop_length,
+                hop_length=int(overlap),
                 power=2,
                 win_length=None,
                 window="hann",
                 center=True,
                 pad_mode="reflect")
-
             data_cpy[p].append(lfb_energy(S, n_bins, n_fft, sr).T)
     
     return data_cpy
