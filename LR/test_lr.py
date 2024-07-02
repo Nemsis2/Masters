@@ -385,10 +385,8 @@ def main():
 
             # # # test the SMOTE setup
             # data_path = f'../../data/tb/combo/new/test/test_dataset_'
-            # val_data = f'../../data/tb/combo/new/'
             # model_path = f'../../models/tb/SMOTE_lr/{feature_type}/{n_feature}_{feature_type}/dev/'
-            # threshold, outer_sens_threshold, outer_spec_threshold  = get_decision_threshold(feature_type, n_feature, model_path, val_data)
-            # auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, threshold, outer_sens_threshold, outer_spec_threshold, model_path, data_path)
+            # auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, model_path, data_path)
 
             # print(f'AUC for SMOTE em {n_feature}_{feature_type}: {auc}')
             # print(f'Sens for SMOTE em {n_feature}_{feature_type}: {sens}')
@@ -397,12 +395,10 @@ def main():
             # print(f'Oracle spec for SMOTE em {n_feature}_{feature_type}: {oracle_spec}')
             # print(f'{feature_type} & {round(n_feature,4)} & {round(auc,4)} & {round(sens,4)} & {round(spec,4)} & {round(oracle_sens,4)} & {round(oracle_spec,4)}')
 
-            # # # # test the frame_skip setup
+            # # test the frame_skip setup
             # data_path = f'../../data/tb/frame_skip/test/test_dataset_'
             # model_path = f'../../models/tb/lr_frame_skip/{feature_type}/{n_feature}_{feature_type}/dev/'
-            # val_data = f'../../data/tb/frame_skip/'
-            # threshold, outer_sens_threshold, outer_spec_threshold  = get_decision_threshold(feature_type, n_feature, model_path, val_data)
-            # auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, threshold, outer_sens_threshold, outer_spec_threshold, model_path, data_path)
+            # auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, model_path, data_path)
 
             # print(f'AUC for frame_skip em {n_feature}_{feature_type}: {auc}')
             # print(f'Sens for frame_skip em {n_feature}_{feature_type}: {sens}')

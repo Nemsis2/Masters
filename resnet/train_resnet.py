@@ -105,6 +105,13 @@ def create_ts_resnet(feature_type, n_feature, model_type='ts'):
 def create_fss_resnet(feature_type, n_feature, fss_feature, model_type='fss'):
     for outer in range(NUM_OUTER_FOLDS):
         print("Outer fold=", outer)
+        # select only the relevant features
+        feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+        if feature_type == 'mfcc':
+            selected_features = outer_fss(outer, n_feature*3, fss_feature, feature_path)
+        else:
+            selected_features = outer_fss(outer, n_feature, fss_feature, feature_path)
+
         
         for inner in range(NUM_INNER_FOLDS):
             print("Inner fold=", inner)
@@ -114,13 +121,6 @@ def create_fss_resnet(feature_type, n_feature, fss_feature, model_type='fss'):
             if feature_type == 'mfcc':
                 data = normalize_mfcc(data)
             data, labels, lengths, names = create_batches(data, labels, names, 'image', BATCH_SIZE)
-
-            # select only the relevant features
-            feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
-            if feature_type == 'mfcc':
-                selected_features = dataset_fss(n_feature*3, fss_feature, feature_path)
-            else:
-                selected_features = dataset_fss(n_feature, fss_feature, feature_path)
 
             for batch in range(len(data)):
                 chosen_features = []
@@ -150,13 +150,13 @@ def main():
         
         for n_feature in features:
             create_inner_resnet(feature_type, n_feature, 'dev')
-            #create_ts_resnet(feature_type, n_feature, 'ts')
+            create_ts_resnet(feature_type, n_feature, 'ts')
 
-            #for fraction_of_feature in [0.1, 0.2, 0.5]:
-            #    if feature_type == 'mfcc':
-            #       create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), 'fss')
-            #    else:
-            #        create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), 'fss')
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
+                if feature_type == 'mfcc':
+                   create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature*3), 'fss')
+                else:
+                    create_fss_resnet(feature_type, n_feature, int(fraction_of_feature*n_feature), 'fss')
     
             
 

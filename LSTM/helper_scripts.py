@@ -92,19 +92,23 @@ def get_EER_threshold(y, results):
 
 
 
-def get_oracle_thresholds(results, labels, threshold):
+def get_oracle_thresholds(labels, results):
+      fpr, tpr, threshold = roc_curve(labels, results, pos_label=1)
+      tpr = np.delete(tpr,0)
+      fpr = np.delete(fpr,0)
+      threshold = np.delete(threshold,0)
+      
       sens_threshold, spec_threshold = np.zeros(len(threshold)), np.zeros(len(threshold))
       for i in range(len(threshold)):
             thresholded_results = (np.array(results)>threshold[i]).astype(np.int8)
             sens, spec = calculate_sens_spec(labels, thresholded_results)
             sens_threshold[i] = np.abs(sens-0.9)
             spec_threshold[i] = np.abs(spec-0.7)
-
+    
       sens = np.nanargmin(sens_threshold)
       spec = np.nanargmin(spec_threshold)
-
+      
       return threshold[sens], threshold[spec]
-
 
 def normalize_mfcc(data):
       for i in range(data.shape[0]):

@@ -10,6 +10,7 @@ from data_grab import *
 from data_preprocessing import *
 from sklearn.metrics import roc_auc_score
 from get_best_features import *
+from tqdm import tqdm
 
 # set the device
 device = "cuda" if th.cuda.is_available() else "cpu"
@@ -86,7 +87,7 @@ class bi_lstm_package():
             data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
 
             # run through all the epochs
-            for epoch in range(self.epochs):
+            for epoch in tqdm(range(self.epochs)):
                   train(data, labels, lengths, self)
 
             # collect the garbage
@@ -103,8 +104,7 @@ class bi_lstm_package():
             data, labels, lengths = create_batches(data, labels, "linear", self.batch_size)
 
             # run through all the epochs
-            for epoch in range(self.epochs):
-                  print("epoch=", epoch)
+            for epoch in tqdm(range(self.epochs)):
                   train_ts(data, labels, self, models, lengths)
 
             # collect the garbage
@@ -122,8 +122,7 @@ class bi_lstm_package():
             criterion_kl = nn.KLDivLoss()
             
             # run through all the epochs
-            for epoch in range(self.epochs):
-                  print("epoch=", epoch)
+            for epoch in tqdm(range(self.epochs)):
                   train_ts_2(data, labels, self, models, lengths, criterion_kl)
 
             # collect the garbage
@@ -153,8 +152,7 @@ class bi_lstm_package():
                   data[batch] = th.as_tensor(np.stack(chosen_features, -1))
             
             # run through all the epochs
-            for epoch in range(self.epochs):
-                  print("epoch=", epoch)
+            for epoch in tqdm(range(self.epochs)):
                   train(data, labels, lengths, self)
 
             # collect the garbage

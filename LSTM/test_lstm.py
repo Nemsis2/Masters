@@ -21,11 +21,11 @@ if device != "cuda":
 
 
 def post_results(feature_type, n_feature, performance_metrics):
-    print(f'AUC for em {n_feature}_{feature_type}: {performance_metrics[0]}')
-    print(f'Sens for em {n_feature}_{feature_type}: {performance_metrics[1]}')
-    print(f'Spec for em {n_feature}_{feature_type}: {performance_metrics[2]}')
-    print(f'Oracle sens for em {n_feature}_{feature_type}: {performance_metrics[3]}')
-    print(f'Oracle spec for em {n_feature}_{feature_type}: {performance_metrics[4]}')
+    print(f'AUC for {n_feature}_{feature_type}: {performance_metrics[0]}')
+    print(f'Sens for {n_feature}_{feature_type}: {performance_metrics[1]}')
+    print(f'Spec for {n_feature}_{feature_type}: {performance_metrics[2]}')
+    print(f'Oracle sens for {n_feature}_{feature_type}: {performance_metrics[3]}')
+    print(f'Oracle spec for {n_feature}_{feature_type}: {performance_metrics[4]}')
     print(f'{feature_type} & {round(n_feature,4)} & {round(performance_metrics[0],4)} & {round(performance_metrics[1],4)} & {round(performance_metrics[2],4)} & {round(performance_metrics[3],4)} & {round(performance_metrics[4],4)}')
 
 
@@ -87,16 +87,15 @@ def test_sm_lstm(feature_type, n_feature):
 
     """
     performance_metrics = np.zeros(5)
-    auc = 0
     for outer in range(NUM_OUTER_FOLDS):
         # find best performing inner for this outer
         best_auc = 0
         for inner in range(NUM_INNER_FOLDS):
             model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            dev_auc = model.dev(return_auc=True) # get the dev auc for this inner model
+            dev_auc = model.dev() # get the dev auc for this inner model
             
             if dev_auc > best_auc:
-                best_auc = auc
+                best_auc = dev_auc
                 best_inner = inner
         
         model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{best_inner}')
@@ -165,10 +164,6 @@ def test_ts_lstm(feature_type, n_feature):
         # load in and test ts model
         model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts_2/lstm_{feature_type}_{n_feature}_outer_fold_{outer}')
         results, labels, names = model.test() # do a forward pass through the models
-        
-        # get auc
-        results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
-        auc += roc_auc_score(labels, results)
 
         # get results gather by patient and calculate auc
         results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
@@ -197,19 +192,15 @@ def test_fss_lstm(feature_type, n_feature, fss_feature):
     for outer in range(NUM_OUTER_FOLDS):
 
         outer_results = []
-        threshold = 0
         for inner in range(NUM_INNER_FOLDS):
             # get the dev model
             model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            threshold += model.dev_fss(fss_feature) # get the decision threshold for this inner fold
             results, labels, names = model.test_fss(fss_feature) # do a forward pass through the models
             results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
             outer_results.append(results)
 
         # get results gather by patient and calculate auc
-        results, labels = gather_results(results, labels, names) # gather results by patient so all a patients cough predictions are averaged
         outer_results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
-
         performance_metrics += calculate_metrics(labels, outer_results)
 
     performance_metrics = performance_metrics/NUM_OUTER_FOLDS
@@ -227,16 +218,16 @@ def main():
         
         for n_feature in features:
             # test the em setup
-            performance_metrics = test_em_lstm(feature_type, n_feature)
-            post_results(feature_type, n_feature, performance_metrics)
+            # performance_metrics = test_em_lstm(feature_type, n_feature)
+            # post_results(feature_type, n_feature, performance_metrics)
 
             # test the sm setup
-            performance_metrics = test_sm_lstm(feature_type, n_feature)
-            post_results(feature_type, n_feature, performance_metrics)
+            # performance_metrics = test_sm_lstm(feature_type, n_feature)
+            # post_results(feature_type, n_feature, performance_metrics)
 
             # test the ts setup
-            performance_metrics = test_ts_lstm(feature_type, n_feature)
-            post_results(feature_type, n_feature, performance_metrics)
+            # performance_metrics = test_ts_lstm(feature_type, n_feature)
+            # post_results(feature_type, n_feature, performance_metrics)
 
 
             for fraction_of_feature in [0.1, 0.2, 0.5]:
