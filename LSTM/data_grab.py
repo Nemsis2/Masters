@@ -4,6 +4,14 @@ from helper_scripts import sort_patient_id
 K_FOLD_PATH = "../data/tb/combo/multi_folds/"
 
 
+def normalize_mfcc(data):
+      for i in range(data.shape[0]):
+            for j in range(data[i].shape[0]):
+                  if np.all(data[i][j]) != 0:
+                        data[i][j] = (data[i][j]-np.max(data[i][j]))/(np.max(data[i][j])-np.min(data[i][j]))
+
+      return data
+
 
 """
 get train data for a specific inner and outer fold
@@ -99,3 +107,20 @@ def extract_test_data(path):
     batch_names = np.array(sort_patient_id(batch_names))
 
     return batch_data, batch_labels, batch_names
+
+
+def load_inner_data(k_fold_path, feature_type, inner):
+    data, labels = extract_inner_fold_data(k_fold_path, inner)
+
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    return data, labels.astype("int")
+
+def load_dev_data(k_fold_path, feature_type, inner):
+    data, labels, names = extract_dev_data(k_fold_path, inner)
+
+    if feature_type=="mfcc":
+        data = normalize_mfcc(data)
+
+    return data, labels.astype("int"), names

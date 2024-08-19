@@ -40,7 +40,74 @@ def post_fss_results(feature_type, n_feature, fraction_of_feature, performance_m
 
 
 
-def test_em_lstm(feature_type, n_feature):
+def dev_lstm(feature_type, n_feature):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    total_auc = 0
+    count  = 0
+    valid_folds = []
+    for outer in range(NUM_OUTER_FOLDS):
+        valid_folds.append([])
+        for inner in range(NUM_INNER_FOLDS):
+            # get the dev model
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+            auc = model.dev() # do a forward pass through the models
+            if auc > 0.5:
+                total_auc += auc
+                count +=1
+                valid_folds[outer].append(1)
+            else:
+                valid_folds[outer].append(0)
+    
+    print(total_auc/count)
+    print(valid_folds)
+    return valid_folds
+
+
+def dev_lstm_fss(feature_type, n_feature, fss_features):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    total_auc = 0
+    count  = 0
+    valid_folds = []
+    for outer in range(NUM_OUTER_FOLDS):
+        valid_folds.append([])
+        for inner in range(NUM_INNER_FOLDS):
+            # get the dev model
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}')
+
+            auc = model.dev_on_select_features(fss_features) # do a forward pass through the models
+            if auc > 0.5:
+                total_auc += auc
+                count +=1
+                valid_folds[outer].append(1)
+            else:
+                valid_folds[outer].append(0)
+    
+    print(total_auc/count)
+    print(valid_folds)
+    return valid_folds
+
+
+def test_em_lstm(feature_type, n_feature, valid_folds):
     """
     Description:
     ---------
@@ -53,22 +120,26 @@ def test_em_lstm(feature_type, n_feature):
 
     """
     performance_metrics = np.zeros(5)
+    count  = 0
     for outer in range(NUM_OUTER_FOLDS):
-
         outer_results = []
-        for inner in range(NUM_INNER_FOLDS):
-            # get the dev model
-            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            results, labels, names = model.test() # do a forward pass through the models
-            results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
-            outer_results.append(results)
+        if sum(valid_folds[outer]) != 0:
+            count +=1
+            print(f'outer: {outer}')
+            for inner in range(NUM_INNER_FOLDS):
+                # get the dev model
+                if valid_folds[outer][inner] == 1:
+                    print(f'inner: {inner}')
+                    model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+                    results, labels, names = model.test() # do a forward pass through the models
+                    results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
+                    outer_results.append(results)
 
-        # get auc
-        results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
+            # get auc
+            results = sum(outer_results)/len(outer_results) # average prediction over the number of models in the outer fold
+            performance_metrics += calculate_metrics(labels, results)
 
-        performance_metrics += calculate_metrics(labels, results)
-
-    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
+    performance_metrics = performance_metrics/count
 
     return performance_metrics
 
@@ -176,7 +247,7 @@ def test_ts_lstm(feature_type, n_feature):
 
 
 
-def test_fss_lstm(feature_type, n_feature, fss_feature):
+def test_fss_lstm(feature_type, n_feature, fss_feature, valid_folds):
     """
     Description:
     ---------
@@ -189,21 +260,24 @@ def test_fss_lstm(feature_type, n_feature, fss_feature):
 
     """
     performance_metrics = np.zeros(5)
+    count  = 0
     for outer in range(NUM_OUTER_FOLDS):
-
         outer_results = []
-        for inner in range(NUM_INNER_FOLDS):
-            # get the dev model
-            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
-            results, labels, names = model.test_fss(fss_feature) # do a forward pass through the models
-            results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
-            outer_results.append(results)
+        if sum(valid_folds[outer]) != 0:
+            count +=1
+            for inner in range(NUM_INNER_FOLDS):
+                if valid_folds[outer][inner] == 1:
+                # get the dev model
+                    model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
+                    results, labels, names = model.test_fss(fss_feature) # do a forward pass through the models
+                    results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
+                    outer_results.append(results)
 
-        # get results gather by patient and calculate auc
-        outer_results = sum(outer_results)/NUM_INNER_FOLDS # average prediction over the number of models in the outer fold
-        performance_metrics += calculate_metrics(labels, outer_results)
+            # get results gather by patient and calculate auc
+            outer_results = sum(outer_results)/len(outer_results) # average prediction over the number of models in the outer fold
+            performance_metrics += calculate_metrics(labels, outer_results)
 
-    performance_metrics = performance_metrics/NUM_OUTER_FOLDS
+    performance_metrics = performance_metrics/count
 
     return performance_metrics
 
@@ -217,8 +291,10 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
+            #valid_folds = dev_lstm(feature_type, n_feature)
+            
             # test the em setup
-            # performance_metrics = test_em_lstm(feature_type, n_feature)
+            # performance_metrics = test_em_lstm(feature_type, n_feature, valid_folds)
             # post_results(feature_type, n_feature, performance_metrics)
 
             # test the sm setup
@@ -232,10 +308,12 @@ def main():
 
             for fraction_of_feature in [0.1, 0.2, 0.5]:
                 if feature_type == 'mfcc':
-                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                    valid_folds = dev_lstm_fss(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3), valid_folds)
                     post_fss_results(feature_type, n_feature, fraction_of_feature, performance_metrics)
                 else:
-                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature))
+                    valid_folds = dev_lstm_fss(feature_type, n_feature, int(fraction_of_feature*n_feature))
+                    performance_metrics = test_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature), valid_folds)
                     post_fss_results(feature_type, n_feature, fraction_of_feature, performance_metrics)
 
 

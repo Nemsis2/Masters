@@ -262,3 +262,19 @@ def calculate_metrics(labels, results):
       inner_oracle_sens, _ = calculate_sens_spec(labels, spec_results)
 
       return auc, inner_eer_sens, inner_eer_spec, inner_oracle_sens, inner_oracle_spec
+
+
+
+
+def select_features(train_data, dev_data, feature_priority, feature):
+      chosen_features, chosen_features_dev = [], []
+      for prev_select_feature in feature_priority:
+            chosen_features.append(np.asarray(train_data[:, :, int(prev_select_feature),:]))
+            chosen_features_dev.append(np.asarray(dev_data[:,:,int(prev_select_feature),:]))
+      
+      chosen_features.append(np.asarray(train_data[:,:,feature,:]))
+      chosen_features_dev.append(np.asarray(dev_data[:,:,feature,:]))
+      chosen_features = th.as_tensor(np.stack(chosen_features, 2))
+      chosen_features_dev = th.as_tensor(np.stack(chosen_features_dev, 2))
+
+      return chosen_features, chosen_features_dev

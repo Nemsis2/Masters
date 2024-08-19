@@ -95,6 +95,53 @@ def create_dev_lstm(feature_type, n_feature, hidden_dim, num_layers):
                 
                 model.train()
                 model.save()
+
+
+def dev_lstm(feature_type, n_feature):
+    """
+    Description:
+    ---------
+
+    Inputs:
+    ---------
+
+    Outputs:
+    --------
+
+    """
+    total_auc = 0
+    count  = 0
+    valid_folds = []
+    for outer in range(NUM_OUTER_FOLDS):
+        valid_folds.append([])
+        for inner in range(NUM_INNER_FOLDS):
+            # get the dev model
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+            auc = model.dev() # do a forward pass through the models
+            if auc > 0.5:
+                total_auc += auc
+                count +=1
+                valid_folds[outer].append(1)
+            else:
+                valid_folds[outer].append(0)
+        
+        if sum(valid_folds[outer]) == 0:
+            best_auc = 0
+            for inner in range(NUM_INNER_FOLDS):
+                # get the dev model
+                model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}')
+                auc = model.dev() # do a forward pass through the models
+                if auc > best_auc:
+                    best_auc = auc
+                    valid_inner_fold = inner
+        
+            count += 1
+            total_auc += best_auc
+            valid_folds[outer][valid_inner_fold] = 1
+    
+    print(total_auc/count)
+    print(valid_folds)
+    return valid_folds
     
 
 def create_exclusive_ts_lstm(feature_type, n_feature, hidden_dim, num_layers):
@@ -146,10 +193,8 @@ def create_ts_lstm(feature_type, n_feature, hidden_dim, num_layers):
     --------
 
     """
-    model_path = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/ts_2/'
-    
     print(f'Creating ts_2 models for {n_feature}_{feature_type}')
-
+    valid_folds = dev_lstm(feature_type, n_feature)
     for outer in range(NUM_OUTER_FOLDS):
         print("Outer fold=", outer)
         
@@ -160,6 +205,7 @@ def create_ts_lstm(feature_type, n_feature, hidden_dim, num_layers):
 
         models = []
         for inner in range(NUM_INNER_FOLDS):
+            if valid_folds[outer][inner] == 1:
                 models.append(load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/dev/lstm_{feature_type}_{n_feature}_outer_fold_{outer}_inner_fold_{inner}'))
 
         model.train_ts(models)
@@ -169,7 +215,6 @@ def create_ts_lstm(feature_type, n_feature, hidden_dim, num_layers):
 
 def create_fss_lstm(feature_type, n_feature, fss_feature, hidden_dim, num_layers):
     # set the model path
-    model_path = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/'
     for outer in range(NUM_OUTER_FOLDS):
         print("Outer fold=", outer)
         
@@ -227,15 +272,15 @@ def main():
             features = [80, 128, 180] 
         
         for n_feature in features:
-            create_dev_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+            # create_dev_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
 
             create_ts_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
 
-            for fraction_of_feature in [0.1, 0.2, 0.5]:
-                if feature_type == 'mfcc':
-                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
-                else:
-                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+            # for fraction_of_feature in [0.1, 0.2, 0.5]:
+            #     if feature_type == 'mfcc':
+            #         create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+            #     else:
+            #         create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
     
 if __name__ == "__main__":
     main()

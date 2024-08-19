@@ -222,17 +222,17 @@ def main():
 
         
         for n_feature in features:
-            #create_inner_lr(feature_type, n_feature,'dev')
+            create_inner_lr(feature_type, n_feature,'dev')
             #create_inner_SMOTE_lr(feature_type, n_feature,'dev')
             #create_inner_per_frame_lr(feature_type, n_feature)
             #create_inner_frame_skip_lr(feature_type, n_feature,'dev')
             
-            for fraction_of_feature in [0.1, 0.2, 0.5]:
+            # for fraction_of_feature in [0.1, 0.2, 0.5]:
                 
-                if feature_type == 'mfcc':
-                    create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
-                else:
-                    create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature))
+            #     if feature_type == 'mfcc':
+            #         create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+            #     else:
+            #         create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature))
             
 
 

@@ -188,3 +188,51 @@ def calculate_metrics(labels, results):
       inner_oracle_sens, _ = calculate_sens_spec(labels, spec_results)
 
       return auc, inner_eer_sens, inner_eer_spec, inner_oracle_sens, inner_oracle_spec
+
+
+def select_features(train_data, dev_data, feature_priority):
+      base_features = []
+      for batch in range(len(train_data)):
+            base_features_batch = []
+            for prev_select_feature in feature_priority:
+                  base_features_batch.append(np.asarray(train_data[batch][:,:,int(prev_select_feature)]))
+            
+            base_features.append((np.stack(base_features_batch, -1)))
+
+      base_dev_features = []
+      for batch in range(len(dev_data)):
+            base_dev_features_batch = []
+            for prev_select_feature in feature_priority:
+                  base_dev_features_batch.append(np.asarray(dev_data[batch][:,:,int(prev_select_feature)]))
+            
+            base_dev_features.append((np.stack(base_dev_features_batch, -1)))
+
+      return base_features, base_dev_features
+
+
+def add_latest_feature(train_data, dev_data, chosen_features, chosen_features_dev, feature):
+      
+      if len(chosen_features) != 0:
+            new_feature = []
+            for batch in range(len(chosen_features)):
+                  new_feature.append(th.unsqueeze(th.as_tensor(np.asarray(train_data[batch][:,:,feature])), -1))
+            for i in range(len(new_feature)):
+                  chosen_features[i] = th.cat((chosen_features[i] ,new_feature[i]), -1)
+
+
+            new_feature = []
+            for batch in range(len(chosen_features_dev)):
+                  new_feature.append(th.unsqueeze(th.as_tensor(np.asarray(dev_data[batch][:,:,feature])), -1))
+            for i in range(len(new_feature)):
+                  chosen_features_dev[i] = th.cat((chosen_features_dev[i] ,new_feature[i]), -1)
+
+      else:
+            for batch in range(len(train_data)):
+                  base_features_batch = (np.asarray((train_data[batch][:,:,int(feature),np.newaxis])))
+                  chosen_features.append(th.as_tensor(base_features_batch))
+
+            for batch in range(len(dev_data)):
+                  base_dev_features_batch = (np.asarray(dev_data[batch][:,:,int(feature),np.newaxis]))
+                  chosen_features_dev.append(th.as_tensor(base_dev_features_batch))
+
+      return chosen_features, chosen_features_dev

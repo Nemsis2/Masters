@@ -7,13 +7,14 @@ from helper_scripts import *
 from data_grab import *
 from data_preprocessing import *
 from get_best_features import *
-from lr_model_scripts import *
+from lstm_model_scripts import *
 
 # declare global variables
 # set hyperpaperameters
 BATCH_SIZE = 64
 NUM_OUTER_FOLDS = 3
 NUM_INNER_FOLDS = 4
+EPOCHS = 16
 
 # Find gpu. If it cannot be found exit immediately
 device = "cuda" if th.cuda.is_available() else "cpu"
@@ -22,8 +23,7 @@ if device != "cuda":
     print("exiting since cuda not enabled")
     exit(1)
 
-
-def do_fss_lr(feature_type, n_feature):
+def do_fss_lstm(feature_type, n_feature, hidden_dim, num_layers):
     """
     Description:
     ---------
@@ -47,37 +47,41 @@ def do_fss_lr(feature_type, n_feature):
             # load in training data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
             train_data, train_labels = load_inner_data(k_fold_path, feature_type, inner)
+            train_data, train_labels, train_lengths = create_batches(train_data, train_labels, "linear", BATCH_SIZE)
             
             # load in dev data
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
             dev_data, dev_labels, dev_names = load_dev_data(k_fold_path, feature_type, inner)
+            dev_data, dev_labels, dev_lengths = create_batches(dev_data, dev_labels, "linear", BATCH_SIZE)
 
-            # get the best params for this model and feature combination
-            model, params = grid_search_lr(train_data, train_labels)
-            print(params)
-
-            # iterate feature-1 times
             while len(feature_priority) != total_features:
                 performance = []
+
+                # append all previously selected features
+                if len(feature_priority) != 0:
+                    chosen_features, chosen_features_dev = select_features(train_data, dev_data, feature_priority)
+                else: chosen_features, chosen_features_dev = [], []
+
                 # Pass through all unselected features
                 for feature in features:
+                    # append newest feature
+                    copy_of_chosen_features = chosen_features.copy()
+                    copy_of_chosen_features_dev = chosen_features_dev.copy()
+                    latest_features, latest_features_dev = add_latest_feature(train_data, dev_data, copy_of_chosen_features, copy_of_chosen_features_dev, feature)
+
                     # create new model
-                    model = LogisticRegression(C = params['C'], l1_ratio = params['l1_ratio'],
-                                                max_iter=1000000, solver='saga', penalty='elasticnet', multi_class = 'multinomial', n_jobs = -1)
-                        
-                    # get the chosen features    
-                    chosen_features, chosen_features_dev = select_features(train_data, dev_data, feature_priority, feature)
-                    
+                    model = bi_lstm_package(len(feature_priority)+1, hidden_dim[outer], num_layers[outer], outer, inner, EPOCHS, BATCH_SIZE, 'dev', n_feature, feature_type)
+
                     # train the model
-                    model.fit(chosen_features, train_labels)
-                    results = model.predict_proba(chosen_features_dev)
-                    results, dev_labels_ = gather_results(results, dev_labels, dev_names)
-                    auc = roc_auc_score(dev_labels_, results)
+                    model.train_on_select_features(latest_features, train_labels, train_lengths)
+
+                    # assess performance
+                    auc = model.dev_on_select_features(latest_features_dev, dev_labels, dev_names, dev_lengths)
                     performance.append(auc)
-                    print("new feature:", feature, "AUC:", auc)
+                    print(f'auc:{auc}')
 
                     # force delete loaded in model
-                    del model
+                    del model, copy_of_chosen_features, copy_of_chosen_features_dev
                     gc.collect()
 
                 # select best performing feature from list
@@ -94,27 +98,38 @@ def do_fss_lr(feature_type, n_feature):
                 features = np.delete(features, best_feature)
                 
                 #save current feature list
-                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/features_outer_{outer}_inner_{inner}.txt'
+                file_name = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/docs/features_outer_{outer}_inner_{inner}.txt'
                 with open(file_name, 'w') as f:
                     for feature in feature_priority:
                         f.write("%s\n" % feature)
 
                 # save current auc list
-                file_name = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/auc_outer_{outer}_inner_{inner}.txt'
+                file_name = f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/docs/auc_outer_{outer}_inner_{inner}.txt'
                 with open(file_name, 'w') as f:
                     for auc in auc_priority:
                         f.write("%s\n" % auc)
 
 
 def main():
+    hyperparameters = {'mfcc':{13: {'hidden_dim': [32, 32, 64], 'num_layers': [2, 2, 3]},
+                            26: {'hidden_dim': [128, 32, 64], 'num_layers': [3, 3, 2]},
+                            39: {'hidden_dim': [64, 64, 32], 'num_layers': [2, 1, 3]}},
+                        'melspec': {80: {'hidden_dim': [32, 64, 128], 'num_layers': [2, 2, 3]},
+                                    128: {'hidden_dim': [32, 64, 32], 'num_layers': [1, 1, 1]},
+                                    180: {'hidden_dim': [128, 64, 128], 'num_layers': [3, 1, 3]}},
+                        'lfb':{80: {'hidden_dim': [128, 128, 128], 'num_layers': [2, 2, 3]},
+                                128: {'hidden_dim': [32, 128, 64], 'num_layers': [3, 1, 1]},
+                                180: {'hidden_dim': [128, 128, 128], 'num_layers': [2, 2, 2]}}}
+    
+    
     for feature_type in ['mfcc']:
         if feature_type == 'mfcc':
-            features = [13, 26, 39]
+            features = [39]
         elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180] 
+            features = [80] 
         
         for n_feature in features:
-            do_fss_lr(feature_type, n_feature)
+            do_fss_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
         
 
 if __name__ == "__main__":

@@ -95,6 +95,17 @@ class bi_lstm_package():
             gc.collect()
 
       
+      def train_on_select_features(self, data, labels, lengths):
+            # run through all the epochs
+            for epoch in tqdm(range(self.epochs)):
+                  train(data, labels, lengths, self)
+
+            # collect the garbage
+            del data, labels, lengths
+            gc.collect()
+
+
+      
       def train_exclusive_ts(self, models):
             data, labels = extract_outer_fold_data(self.k_fold_path)
 
@@ -170,7 +181,7 @@ class bi_lstm_package():
         
 
       def dev_fss(self, fss_feature):
-            # read in the test set
+            # read in the dev set
             data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
 
             if self.feature_type=="mfcc":
@@ -201,7 +212,40 @@ class bi_lstm_package():
             threshold  = get_EER_threshold(labels, results)
             
             return threshold
+      
+      
+      def dev_on_select_features(self, fss_feature):
+            # read in the dev set
+            data, labels, names = extract_dev_data(self.k_fold_path, self.inner)
 
+            if self.feature_type=="mfcc":
+                  data = normalize_mfcc(data)
+            
+            data, labels, names, lengths = create_test_batches(data, labels, names, "linear", self.batch_size)
+            # select only the relevant features
+            feature_path = f'../../models/tb/lr/{self.feature_type}/{self.n_feature}_{self.feature_type}/fss/docs/'
+            if self.feature_type == 'mfcc':
+                  selected_features = dataset_fss(self.n_feature*3, fss_feature, feature_path)
+            else:
+                  selected_features = dataset_fss(self.n_feature, fss_feature, feature_path)
+            
+            for batch in range(len(data)):
+                  chosen_features = []
+                  for feature in selected_features:
+                        chosen_features.append(np.asarray(data[batch][:,:,feature]))
+                  data[batch] = th.tensor(np.stack(chosen_features, -1))
+
+            results = []
+            for i in range(len(data)):
+                  with th.no_grad():
+                        results.append(to_softmax((self.model((data[i]).to(device), lengths[i])).cpu()))
+
+            results = np.vstack(results)
+            labels = np.vstack(labels)
+            results, labels = gather_results(results, labels, names)
+            auc = roc_auc_score(labels, results)
+
+            return auc
 
       def dev(self,):
             data, labels, names = extract_dev_data(self.k_fold_path, self.inner)

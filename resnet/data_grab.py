@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 from helper_scripts import sort_patient_id
+from data_preprocessing import create_batches
 
 
 def normalize_mfcc(data):
@@ -111,3 +112,25 @@ def extract_test_data(path):
     batch_names = np.array(sort_patient_id(batch_names))
 
     return batch_data, batch_labels, batch_names
+
+
+def load_train_data(k_fold_path, inner, feature_type):
+    """
+    grab the training data, normalize mfcc and create batches for training
+    """
+    data, labels, names = extract_inner_fold_data(k_fold_path, inner)
+    if feature_type == 'mfcc':
+        data = normalize_mfcc(data)
+
+    return data, labels, names
+
+
+def load_dev_data(k_fold_path, inner, feature_type):
+    """
+    grab the dev data, normalize mfcc and create batches for training
+    """
+    data, labels, names = extract_dev_data(k_fold_path, inner)
+    if feature_type == 'mfcc':
+        data = normalize_mfcc(data)
+
+    return data, labels, names
