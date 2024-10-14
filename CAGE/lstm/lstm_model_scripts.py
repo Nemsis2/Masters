@@ -9,11 +9,20 @@ from helper_scripts import *
 from data_grab import *
 from data_preprocessing import *
 from sklearn.metrics import roc_auc_score
-from get_best_features import *
 from tqdm import tqdm
 
 # set the device
 device = "cuda" if th.cuda.is_available() else "cpu"
+
+
+def load_test_data(k_fold_path):
+    data = pickle.load(open(k_fold_path, 'rb'))
+    data = np.array(data, dtype=object)
+    names = data[:,0]
+    data_ = data[:,1]
+    labels = data[:,2]
+
+    return data_, labels.astype("int"), names
 
 
 """
@@ -71,7 +80,7 @@ class bi_lstm_package():
             self.n_feature = n_feature
             self.feature_type = feature_type
             self.k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-            self.test_path = f'../../data/tb/combo/new/test/test_dataset_{feature_type}_{n_feature}_fold_{outer}.pkl'
+            self.test_path = f'../../../data/tb/CAGE_QC/{feature_type}/{n_feature}/fold_{outer}.pkl'
             
             self.model = bi_lstm(input_size, hidden_dim, layers)
             self.criterion = nn.CrossEntropyLoss()
@@ -249,9 +258,9 @@ class bi_lstm_package():
 
             return auc
 
-      def test(self):
+      def test(self, outer):
             # read in the test set
-            data, labels, names = extract_test_data(self.test_path)
+            data, labels, names = load_test_data(f'../../../data/tb/CAGE_QC/{self.feature_type}/{self.n_feature}/fold_{outer}.pkl')
 
             if self.feature_type=="mfcc":
                   data = normalize_mfcc(data)

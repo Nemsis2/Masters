@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import os
 import pickle
-from sklearn.metrics import roc_auc_score, roc_curve, auc
+from sklearn.metrics import roc_auc_score, roc_curve
 
 
 #https://discuss.pytorch.org/t/is-there-something-like-keras-utils-to-categorical-in-pytorch/5960
@@ -243,7 +243,7 @@ def gather_results(results, labels, names):
 
 def calculate_metrics(labels, results):
       auc = roc_auc_score(labels, results)
-  
+        
       # get eer, and oracle thresholds
       eer_threshold = get_EER_threshold(labels, results)
       sens_threshold, spec_threshold = get_oracle_thresholds(labels, results)

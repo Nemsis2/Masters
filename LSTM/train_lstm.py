@@ -222,9 +222,9 @@ def create_fss_lstm(feature_type, n_feature, fss_feature, hidden_dim, num_layers
             print("Inner fold=", inner)
 
             if feature_type == 'melspec' or feature_type == 'lfb':
-                model = bi_lstm_package(fss_feature, hidden_dim[outer], num_layers[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss', n_feature, feature_type)
+                model = bi_lstm_package(fss_feature, hidden_dim[outer], num_layers[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss_on_resnet', n_feature, feature_type)
             elif feature_type == 'mfcc':
-                model = bi_lstm_package(fss_feature, hidden_dim[outer], num_layers[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss', n_feature, feature_type)
+                model = bi_lstm_package(fss_feature, hidden_dim[outer], num_layers[outer], outer, inner, EPOCHS, BATCH_SIZE, 'fss_on_resnet', n_feature, feature_type)
 
             model.train_fss(fss_feature)
             model.save(fss_feature)
@@ -267,20 +267,20 @@ def main():
     
     for feature_type in ['mfcc', 'melspec', 'lfb']:
         if feature_type == 'mfcc':
-            features = [13, 26, 39]
+            features = [13]
         elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180] 
+            features = [80] 
         
         for n_feature in features:
             # create_dev_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
 
-            create_ts_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+            # create_ts_lstm(feature_type, n_feature, hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
 
-            # for fraction_of_feature in [0.1, 0.2, 0.5]:
-            #     if feature_type == 'mfcc':
-            #         create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
-            #     else:
-            #         create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
+                if feature_type == 'mfcc':
+                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature*3), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
+                else:
+                    create_fss_lstm(feature_type, n_feature, int(fraction_of_feature*n_feature), hyperparameters[feature_type][n_feature]['hidden_dim'], hyperparameters[feature_type][n_feature]['num_layers'])
     
 if __name__ == "__main__":
     main()

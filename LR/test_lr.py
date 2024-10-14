@@ -136,7 +136,7 @@ def dev_lr_fss(feature_type, n_feature, fss_features):
     model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
     
     """
-    feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+    feature_path = f'../../models/tb/resnet/resnet_18/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
     total_auc = 0
     valid_fold_count  = 0
     valid_folds = []
@@ -150,7 +150,7 @@ def dev_lr_fss(feature_type, n_feature, fss_features):
                 selected_features = outer_fss(outer, n_feature, fss_features, feature_path)
 
             k_fold_path = f'../../data/tb/combo/new/{n_feature}_{feature_type}_fold_{outer}.pkl'
-            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/lr_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}'
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss_on_resnet/lr_{feature_type}_{n_feature}_fss_on_resnet_{fss_features}_outer_fold_{outer}_inner_fold_{inner}'
             model = pickle.load(open(model_path, 'rb')) # load in the model
             
             dev_data, dev_labels, names = load_dev_data(k_fold_path, feature_type, inner)
@@ -296,7 +296,7 @@ def test_lr_sm(feature_type, n_feature):
 
 
 def test_lr_fss(feature_type, n_feature, fss_features, valid_folds):
-    feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+    feature_path = f'../../models/tb/resnet/resnet_18/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
 
     auc, sens, spec, oracle_sens, oracle_spec, count = 0,0,0,0,0,0
     for outer in range(NUM_OUTER_FOLDS):
@@ -313,7 +313,7 @@ def test_lr_fss(feature_type, n_feature, fss_features, valid_folds):
             for inner in range(NUM_INNER_FOLDS):
                 # get the testing models
                 if valid_folds[outer][inner] == 1:
-                    model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/lr_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}'
+                    model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss_on_resnet/lr_{feature_type}_{n_feature}_fss_on_resnet_{fss_features}_outer_fold_{outer}_inner_fold_{inner}'
                     models.append(pickle.load(open(model_path, 'rb'))) # load in the model
 
             # grab the testing data
@@ -466,27 +466,27 @@ def test_lr_tb_index(feature_type, n_feature, valid_folds):
 def main():
     for feature_type in ['mfcc', 'melspec', 'lfb']:
         if feature_type == 'mfcc':
-            features = [13, 26, 39]
+            features = [13]
         elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180]
+            features = [80]
 
         for n_feature in features:
         
             # test the em setup
             # get the valid folds
-            # model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/'
-            # valid_folds = dev_lr(feature_type, n_feature, model_path)
+            model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/dev/'
+            valid_folds = dev_lr(feature_type, n_feature, model_path)
             
-            # # test on the test data with the valid folds
-            # data_path = f'../../data/tb/combo/new/test/test_dataset_'
-            # auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, model_path, data_path, valid_folds)
+            # test on the test data with the valid folds
+            data_path = f'../../data/tb/combo/new/test/test_dataset_'
+            auc, sens, spec, oracle_sens, oracle_spec = test_lr(feature_type, n_feature, model_path, data_path, valid_folds)
 
-            # print(f'AUC for em {n_feature}_{feature_type}: {auc}')
-            # print(f'Sens for em {n_feature}_{feature_type}: {sens}')
-            # print(f'Spec for em {n_feature}_{feature_type}: {spec}')
-            # print(f'Oracle sens for em {n_feature}_{feature_type}: {oracle_sens}')
-            # print(f'Oracle spec for em {n_feature}_{feature_type}: {oracle_spec}')
-            # print(f'{feature_type} & {round(n_feature,4)} & {round(auc,4)} & {round(sens,4)} & {round(spec,4)} & {round(oracle_sens,4)} & {round(oracle_spec,4)}')
+            print(f'AUC for em {n_feature}_{feature_type}: {auc}')
+            print(f'Sens for em {n_feature}_{feature_type}: {sens}')
+            print(f'Spec for em {n_feature}_{feature_type}: {spec}')
+            print(f'Oracle sens for em {n_feature}_{feature_type}: {oracle_sens}')
+            print(f'Oracle spec for em {n_feature}_{feature_type}: {oracle_spec}')
+            print(f'{feature_type} & {round(n_feature,4)} & {round(auc,4)} & {round(sens,4)} & {round(spec,4)} & {round(oracle_sens,4)} & {round(oracle_spec,4)}')
 
 
             # test the tb_index setup
@@ -550,22 +550,22 @@ def main():
 
 
             
-            for fraction_of_feature in [0.1, 0.2, 0.5]:
-                if feature_type == 'mfcc':
-                    valid_folds = dev_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature*3))
-                    print(valid_folds)
-                    auc, sens, spec, oracle_sens, oracle_spec = test_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature*3), valid_folds)
-                else:
-                    valid_folds = dev_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature))
-                    auc, sens, spec, oracle_sens, oracle_spec = test_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature), valid_folds)
-                    print(valid_folds)
+            # for fraction_of_feature in [0.1, 0.2, 0.5]:
+            #     if feature_type == 'mfcc':
+            #         valid_folds = dev_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature*3))
+            #         print(valid_folds)
+            #         auc, sens, spec, oracle_sens, oracle_spec = test_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature*3), valid_folds)
+            #     else:
+            #         valid_folds = dev_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature))
+            #         auc, sens, spec, oracle_sens, oracle_spec = test_lr_fss(feature_type, n_feature, int(n_feature*fraction_of_feature), valid_folds)
+            #         print(valid_folds)
 
-                print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {auc}')
-                print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {sens}')
-                print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {spec}')
-                print(f'Oracle sens for frame_skip fss {n_feature}_{feature_type}: {oracle_sens}')
-                print(f'Oracle spec for frame_skip fss {n_feature}_{feature_type}: {oracle_spec}')
-                print(f'{feature_type} & {round(n_feature,4)} & {round(auc,4)} & {round(sens,4)} & {round(spec,4)} & {round(oracle_sens,4)} & {round(oracle_spec,4)}')
+            #     print(f'AUC for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {auc}')
+            #     print(f'Sens for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {sens}')
+            #     print(f'Spec for {n_feature}_{feature_type} with {int(fraction_of_feature*n_feature)}: {spec}')
+            #     print(f'Oracle sens for frame_skip fss {n_feature}_{feature_type}: {oracle_sens}')
+            #     print(f'Oracle spec for frame_skip fss {n_feature}_{feature_type}: {oracle_spec}')
+            #     print(f'{feature_type} & {round(n_feature,4)} & {round(auc,4)} & {round(sens,4)} & {round(spec,4)} & {round(oracle_sens,4)} & {round(oracle_spec,4)}')
             
 
 

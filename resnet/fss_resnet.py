@@ -56,7 +56,7 @@ def generate_feature_list_resnet_18(feature_type, n_features):
                 feature_selection_dev_data = np.concatenate(dev_data, 0)
                 # iterate feature-1 times
                 while len(selected_feature_list) != total_features:
-                    auc_list = []
+                    #auc_list = [] #this is wrong and will break everything
                     # Pass through all unselected features
                     for feature in features:
                         model = Resnet18()

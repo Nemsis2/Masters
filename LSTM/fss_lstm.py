@@ -64,6 +64,8 @@ def do_fss_lstm(feature_type, n_feature, hidden_dim, num_layers):
 
                 # Pass through all unselected features
                 for feature in features:
+                    print(f'total features: {len(feature_priority)+1}')
+                    print(f'Current feature eval: {feature}')
                     # append newest feature
                     copy_of_chosen_features = chosen_features.copy()
                     copy_of_chosen_features_dev = chosen_features_dev.copy()
@@ -76,7 +78,7 @@ def do_fss_lstm(feature_type, n_feature, hidden_dim, num_layers):
                     model.train_on_select_features(latest_features, train_labels, train_lengths)
 
                     # assess performance
-                    auc = model.dev_on_select_features(latest_features_dev, dev_labels, dev_names, dev_lengths)
+                    auc = model.dev_fss(latest_features_dev, dev_labels, dev_names, dev_lengths)
                     performance.append(auc)
                     print(f'auc:{auc}')
 
@@ -122,7 +124,7 @@ def main():
                                 180: {'hidden_dim': [128, 128, 128], 'num_layers': [2, 2, 2]}}}
     
     
-    for feature_type in ['mfcc']:
+    for feature_type in ['mfcc', 'melspec', 'lfb']:
         if feature_type == 'mfcc':
             features = [39]
         elif feature_type == 'melspec' or feature_type == 'lfb':

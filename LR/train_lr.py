@@ -150,13 +150,13 @@ def create_fss_lr(feature_type, n_feature, fss_feature):
     model_type: (string) type of model. Specifies data to be trained on as well as which folder the modesl will be saved too.
     """
     # set the model path
-    model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/'
+    model_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss_on_resnet/'
 
     for outer in range(NUM_OUTER_FOLDS):
         print("Outer fold=", outer)
 
         # select only the relevant features
-        feature_path = f'../../models/tb/lr/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
+        feature_path = f'../../models/tb/resnet/resnet_18/{feature_type}/{n_feature}_{feature_type}/fss/docs/'
         if feature_type == 'mfcc':
             selected_features = outer_fss(outer, n_feature*3, fss_feature, feature_path)
         else:
@@ -175,7 +175,7 @@ def create_fss_lr(feature_type, n_feature, fss_feature):
             chosen_features = th.as_tensor(np.stack(chosen_features, -1))
 
             model, params = grid_search_lr(chosen_features, labels)
-            pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
+            pickle.dump(model, open(f'{model_path}lr_{feature_type}_{n_feature}_fss_on_resnet_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}', 'wb')) # save the model
 
 
 def create_inner_per_frame_lr(feature_type, n_feature):
@@ -216,23 +216,23 @@ def create_inner_per_frame_lr(feature_type, n_feature):
 def main():
     for feature_type in ['mfcc', 'melspec', 'lfb']:
         if feature_type == 'mfcc':
-            features = [13, 26, 39]
+            features = [13]
         elif feature_type == 'melspec' or feature_type == 'lfb':
-            features = [80, 128, 180] 
+            features = [80] 
 
         
         for n_feature in features:
-            create_inner_lr(feature_type, n_feature,'dev')
+            #create_inner_lr(feature_type, n_feature,'dev')
             #create_inner_SMOTE_lr(feature_type, n_feature,'dev')
             #create_inner_per_frame_lr(feature_type, n_feature)
             #create_inner_frame_skip_lr(feature_type, n_feature,'dev')
             
-            # for fraction_of_feature in [0.1, 0.2, 0.5]:
+            for fraction_of_feature in [0.1, 0.2, 0.5]:
                 
-            #     if feature_type == 'mfcc':
-            #         create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
-            #     else:
-            #         create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature))
+                if feature_type == 'mfcc':
+                    create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature*3))
+                else:
+                    create_fss_lr(feature_type, n_feature, int(fraction_of_feature*n_feature))
             
 
 

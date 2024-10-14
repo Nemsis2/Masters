@@ -92,7 +92,7 @@ def dev_lstm_fss(feature_type, n_feature, fss_features):
         valid_folds.append([])
         for inner in range(NUM_INNER_FOLDS):
             # get the dev model
-            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}')
+            model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss_on_resnet/lstm_{feature_type}_{n_feature}_fss_{fss_features}_outer_fold_{outer}_inner_fold_{inner}')
 
             auc = model.dev_on_select_features(fss_features) # do a forward pass through the models
             if auc > 0.5:
@@ -268,7 +268,7 @@ def test_fss_lstm(feature_type, n_feature, fss_feature, valid_folds):
             for inner in range(NUM_INNER_FOLDS):
                 if valid_folds[outer][inner] == 1:
                 # get the dev model
-                    model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
+                    model = load_model(f'../../models/tb/lstm/{feature_type}/{n_feature}_{feature_type}/fss_on_resnet/lstm_{feature_type}_{n_feature}_fss_{fss_feature}_outer_fold_{outer}_inner_fold_{inner}')
                     results, labels, names = model.test_fss(fss_feature) # do a forward pass through the models
                     results, labels = gather_results(results, labels, names) # average prediction over all coughs for a single patient
                     outer_results.append(results)
